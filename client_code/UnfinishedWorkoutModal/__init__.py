@@ -13,7 +13,7 @@ class UnfinishedWorkoutModal(UnfinishedWorkoutModalTemplate):
         self.add_component(self.root)
         head = FlowPanel(align="justify")
         head.add_component(Label(text="Some sets are unfinished", role="exercise-title", spacing_below="none"))
-        close = Button(text="Close", role="button-secondary")
+        close = Button(text="✕", role="icon-button")
         close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         head.add_component(close)
         self.root.add_component(head)

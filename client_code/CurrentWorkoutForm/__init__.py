@@ -1,7 +1,6 @@
 from ._anvil_designer import CurrentWorkoutFormTemplate
 from anvil import *
 import anvil.server
-import anvil.js
 
 from ..ExerciseCard import ExerciseCard
 from ..ChangeExerciseModal import ChangeExerciseModal
@@ -23,11 +22,9 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
             "userResolved": bool(self.bootstrap_payload.get("userResolved")),
             "user": self.bootstrap_payload.get("user") or {},
             "workout": self.bootstrap_payload.get("workout"),
-            "completionSummary": None,
         }
         self.exercise_cards = []
         self.modal_form = None
-        self.top_menu_open = False
         self.auto_prompted = False
         self._build_ui()
         self.render()
@@ -36,7 +33,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.root = ColumnPanel(role="shell-wrap")
         self.add_component(self.root)
 
-        self.subtitle = Label(text="", role="page-subtitle", spacing_above="none")
+        self.subtitle = Label(text="", role="page-subtitle", spacing_above="none", spacing_below="none")
         self.root.add_component(self.subtitle)
 
         self.registration_card = ColumnPanel(role="card")
@@ -51,7 +48,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.registration_continue.set_event_handler("click", self.register_continue_click)
         self.registration_name.set_event_handler("pressed_enter", self.register_continue_click)
 
-        self.workout_area = ColumnPanel()
+        self.workout_area = ColumnPanel(role="workout-area")
         self.root.add_component(self.workout_area, full_width_row=True)
 
         self.hero = ColumnPanel(role="card hero-card")
@@ -65,15 +62,15 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.hero_left.add_component(self.day_helper)
         self.hero_top.add_component(self.hero_left, row="A", col_xs=0, width_xs=7)
 
-        self.hero_right = ColumnPanel()
-        self.hero_day_row = FlowPanel(align="right")
-        self.day_selector = DropDown(include_placeholder=False, role="select day-select")
+        self.hero_right = FlowPanel(align="right")
+        self.day_selector = DropDown(include_placeholder=False, role="day-select")
+        self.top_menu_anchor = ColumnPanel(role="menu-anchor")
         self.top_menu_btn = Button(text="⋯", role="icon-button")
-        self.hero_day_row.add_component(self.day_selector)
-        self.hero_day_row.add_component(self.top_menu_btn)
-        self.hero_right.add_component(self.hero_day_row)
+        self.top_menu_anchor.add_component(self.top_menu_btn)
         self.top_menu_panel = LinearPanel(role="inline-menu", visible=False, spacing="none")
-        self.hero_right.add_component(self.top_menu_panel)
+        self.top_menu_anchor.add_component(self.top_menu_panel)
+        self.hero_right.add_component(self.day_selector)
+        self.hero_right.add_component(self.top_menu_anchor)
         self.hero_top.add_component(self.hero_right, row="A", col_xs=7, width_xs=5)
 
         self.top_menu_add_ex = Button(text="Add exercise", role="menu-item")
@@ -91,7 +88,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.workout_area.add_component(self.exercise_list, full_width_row=True)
 
         self.footer_wrap = ColumnPanel(role="sticky-submit")
-        self.workout_area.add_component(self.footer_wrap, full_width_row=True)
+        self.root.add_component(self.footer_wrap, full_width_row=True)
         self.footer_card = ColumnPanel(role="card")
         self.footer_wrap.add_component(self.footer_card, full_width_row=True)
         self.complete_btn = Button(text="Workout Complete", role="button-primary")
@@ -102,10 +99,8 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.footer_card.add_component(self.credit)
 
         self.modal_backdrop = ColumnPanel(role="modal-backdrop", visible=False)
-        self.modal_backdrop.background = "rgba(5,8,12,0.76)"
         self.root.add_component(self.modal_backdrop, full_width_row=True)
         self.modal_host = ColumnPanel()
-        self.modal_backdrop.add_component(Spacer(height=20))
         self.modal_backdrop.add_component(self.modal_host, full_width_row=True)
 
         self.day_selector.set_event_handler("change", self.day_selector_change)
@@ -123,22 +118,23 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         return workout_user.get("display_name") or user.get("display_name") or "User"
 
     def render(self):
-        self.registration_card.visible = bool(self.state.get("registrationRequired"))
-        self.workout_area.visible = not self.registration_card.visible
+        reg = bool(self.state.get("registrationRequired"))
+        self.registration_card.visible = reg
+        self.workout_area.visible = not reg
+        self.footer_wrap.visible = not reg
 
-        if self.registration_card.visible:
-            active = self.state.get("activeEmail")
-            if active:
-                self.registration_help.text = f"Saving as {active}. Enter your name to continue."
-            else:
-                self.registration_help.text = "Enter your name to continue."
-            self.registration_name.text = (self.state.get("user") or {}).get("display_name") or ""
+        if reg:
+            active = self.state.get("activeEmail") or ""
+            self.registration_help.text = f"Saving as {active}. Enter your name to continue." if active else "Enter your name to continue."
+            self.registration_name.text = ""
             self.subtitle.text = "Complete setup"
             return
 
         workout = self.state.get("workout") or {}
-        self.subtitle.text = f"Logged in as {self._user_display_name()}{' • ' + self.state.get('activeEmail') if self.state.get('activeEmail') else ''}"
-        self.hero_title.text = self._user_display_name()
+        display_name = self._user_display_name()
+        email = self.state.get("activeEmail") or ""
+        self.subtitle.text = f"Logged in as {display_name}{' • ' + email if email else ''}"
+        self.hero_title.text = display_name
         self.day_helper.text = self._day_helper_text()
         self.top_menu_remove_day.visible = bool(workout.get("can_remove_current_day"))
 
@@ -152,9 +148,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         workout = self.state.get("workout") or {}
         current_day = workout.get("current_day") or ""
         next_day = workout.get("next_scheduled_day") or current_day
-        if current_day == next_day:
-            return f"Displayed Workout: Day {current_day}"
-        return f"Displayed Workout: Day {current_day} • Next scheduled: Day {next_day}"
+        return f"Displayed Workout: Day {current_day}" if current_day == next_day else f"Displayed Workout: Day {current_day} • Next scheduled: Day {next_day}"
 
     def _render_hero_progress(self):
         self.hero_progress.clear()
@@ -201,6 +195,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.render()
 
     def day_selector_change(self, **event_args):
+        self._close_top_menu()
         payload = anvil.server.call("load_workout_day", self.day_selector.selected_value)
         self._refresh_workout(payload)
 
@@ -260,6 +255,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.open_modal(form)
 
     def exercise_change(self, exercise_data=None, **event_args):
+        self._close_top_menu()
         form = ChangeExerciseModal(current_name=(exercise_data or {}).get("exercise_label", ""))
         form.tag = {"slot_number": (exercise_data or {}).get("slot_number")}
         form.set_event_handler("x-close-modal", self.close_modal)
@@ -360,14 +356,9 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         idx = self._first_unfinished_index()
         if idx >= 0:
             try:
-                card = self.exercise_cards[idx]
-                card.expand_from_parent()
+                self.exercise_cards[idx].scroll_into_view()
             except Exception:
                 pass
-
-    def submit_workout_anyway(self, **event_args):
-        self.close_modal()
-        self.submit_current_workout(force_anyway=True)
 
     def finish_remaining_sets(self, **event_args):
         for ex in self._assigned_exercises():
@@ -384,100 +375,49 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
 
     def complete_after_finish(self, **event_args):
         self.close_modal()
-        self.submit_current_workout(force_anyway=True)
+        self.submit_current_workout(show_completion_immediately=True)
 
-    def build_completion_summary(self):
-        exercises = self._assigned_exercises()
-        tile_states = []
-        any_exceeded = False
-        any_skipped = False
-        for ex in exercises:
-            if ex.get("status") == "skipped":
-                tile_states.append("red")
-                any_skipped = True
-                continue
-            sets = ex.get("sets", [])
-            any_unperformed = any(not s.get("performed") for s in sets)
-            any_performed = any(s.get("performed") for s in sets)
-            if any_unperformed and any_performed:
-                tile_states.append("orange")
-                any_skipped = True
-            else:
-                tile_states.append("green")
-            for s in sets:
-                if int(s.get("reps") or 0) > int(ex.get("recommended_reps") or 0):
-                    any_exceeded = True
-                if not ex.get("uses_bodyweight") and s.get("weight") is not None and ex.get("recommended_weight") is not None and float(s.get("weight") or 0) > float(ex.get("recommended_weight") or 0):
-                    any_exceeded = True
-        bucket = "exceeded" if any_exceeded else ("skipped" if any_skipped else "standard")
-        completed_count = len(anvil.server.call("get_recent_history", 1000) or [])
-        message = anvil.server.call("get_rotated_message_client", bucket, completed_count)
-        dt = anvil.server.call("format_share_datetime_client")
-        share_text = "Oslocon Workout!\n" + dt + "\n" + "".join({"green":"🟩","orange":"🟧","red":"🟥","gray":"⬜"}.get(x,"⬜") for x in tile_states)
-        return {
-            "headline": {"standard": "Great work", "skipped": "Workout logged", "exceeded": "Outstanding work"}.get(bucket, "Great work"),
-            "message": message,
-            "date": dt,
-            "tile_states": tile_states,
-            "share_text": share_text,
-            "show_confetti": bucket in ("standard", "exceeded"),
-            "bucket": bucket,
-        }
-
-    def _collect_payload(self):
-        resolved = (self.state.get("workout") or {}).get("resolvedUser") or {}
-        return {
-            "email": resolved.get("email") or self.state.get("activeEmail") or "",
-            "person_id": resolved.get("person_id") or "",
-            "workout_day": self.state["workout"]["current_day"],
-            "exercises": [
-                {
-                    "slot_number": ex.get("slot_number"),
-                    "exercise": ex.get("exercise_label"),
-                    "status": "skipped" if ex.get("status") == "skipped" else "completed",
-                    "muscle_group": ex.get("muscle_group"),
-                    "group_size": ex.get("group_size"),
-                    "recommended_weight": ex.get("recommended_weight"),
-                    "recommended_reps": ex.get("recommended_reps"),
-                    "effort": "Solid" if ex.get("status") != "skipped" else "",
-                    "sets": [
-                        {"weight": s.get("weight"), "reps": s.get("reps"), "performed": bool(s.get("performed"))}
-                        for s in ex.get("sets", [])
-                    ],
-                }
-                for ex in self._assigned_exercises()
-            ],
-        }
-
-    def submit_current_workout(self, force_anyway=False, show_completion_immediately=False):
-        if not force_anyway and self._has_unfinished_required_sets():
-            self.open_unfinished_modal(False)
-            return
-        summary = self.build_completion_summary()
-        self.state["completionSummary"] = summary
-        self.submit_msg.text = "Saving…"
-        if show_completion_immediately:
-            form = WorkoutCompleteModal(summary=summary, is_saving=True)
-            form.set_event_handler("x-close-modal", self.close_modal)
-            form.set_event_handler("x-copy", self.copy_share_text)
-            self.open_modal(form)
-        payload = self._collect_payload()
-        new_payload = anvil.server.call("submit_workout", payload)
-        self.submit_msg.text = "Saved. Loaded next workout."
+    def submit_workout_anyway(self, **event_args):
         self.close_modal()
-        form = WorkoutCompleteModal(summary=summary, is_saving=False)
-        form.set_event_handler("x-close-modal", self.close_modal)
-        form.set_event_handler("x-copy", self.copy_share_text)
-        self.open_modal(form)
-        self._refresh_workout(new_payload)
-        try:
-            anvil.js.window.scrollTo({"top": 0, "behavior": "smooth"})
-        except Exception:
-            pass
+        self.submit_current_workout(show_completion_immediately=False)
+
+    def _collect_submit_payload(self):
+        workout = self.state.get("workout") or {}
+        payload = {
+            "day_code": workout.get("current_day"),
+            "exercises": [],
+        }
+        for ex in workout.get("exercises", []):
+            if ex.get("is_unassigned") or not ex.get("exercise_id"):
+                continue
+            payload["exercises"].append({
+                "slot_number": ex.get("slot_number"),
+                "exercise_id": ex.get("exercise_id"),
+                "uses_bodyweight": ex.get("uses_bodyweight"),
+                "recommended_weight": ex.get("recommended_weight"),
+                "recommended_reps": ex.get("recommended_reps"),
+                "status": ex.get("status"),
+                "sets": ex.get("sets", []),
+            })
+        return payload
+
+    def submit_current_workout(self, show_completion_immediately=True):
+        self.submit_msg.text = "Saving..."
+        result = anvil.server.call("submit_workout", self._collect_submit_payload())
+        self.submit_msg.text = "Saved. Loaded next workout."
+        self.state["workout"] = (result or {}).get("workout") or {}
+        self.render()
+        if show_completion_immediately:
+            summary = (result or {}).get("completion_summary") or {}
+            modal = WorkoutCompleteModal(summary=summary)
+            modal.set_event_handler("x-close-modal", self.close_modal)
+            modal.set_event_handler("x-copy", self.copy_share_text)
+            self.open_modal(modal)
 
     def copy_share_text(self, text=None, **event_args):
         try:
+            import anvil.js
             anvil.js.window.navigator.clipboard.writeText(text or "")
-            Notification("Copied to clipboard.", style="success").show()
+            Notification("Copied", style="success").show()
         except Exception:
-            Notification("Clipboard copy unavailable.", style="warning").show()
+            Notification("Copy failed", style="warning").show()

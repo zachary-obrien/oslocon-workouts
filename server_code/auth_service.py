@@ -6,6 +6,9 @@ from routine_service import ensure_preset_routine
 from workout_service import build_workout_payload
 
 
+LEGACY_PLACEHOLDER_NAMES = {"bootstrap user", "test user"}
+
+
 def _require_logged_in_user():
     user = anvil.users.get_user()
     if user is None:
@@ -17,12 +20,10 @@ def _require_logged_in_user():
 
 
 def _display_name_for_user(user):
-    name = (user.get("display_name") or "").strip() if hasattr(user, 'get') else (user["display_name"] or "").strip()
-    if name:
-        return name
-    email = user["email"] or ""
-    local = email.split("@")[0] if email else "User"
-    return " ".join(part.capitalize() for part in local.replace('.', ' ').split()) or "User"
+    raw = (user["display_name"] or "").strip()
+    if raw and raw.lower() not in LEGACY_PLACEHOLDER_NAMES:
+        return raw
+    return ""
 
 
 def _serialize_user(user):
@@ -39,7 +40,8 @@ def get_bootstrap_payload():
     user = _require_logged_in_user()
     ensure_user_defaults(user)
 
-    registration_required = not bool((user["display_name"] or "").strip())
+    display_name = _display_name_for_user(user)
+    registration_required = not bool(display_name)
     workout = None if registration_required else build_workout_payload(user, None)
 
     return {

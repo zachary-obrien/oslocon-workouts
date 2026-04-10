@@ -3,18 +3,20 @@ from anvil import *
 
 
 class WorkoutCompleteModal(WorkoutCompleteModalTemplate):
-    def __init__(self, summary=None, is_saving=False, **properties):
+    def __init__(self, summary=None, **properties):
         self.init_components(**properties)
         self.summary = summary or {}
-        self.is_saving = is_saving
         self._build_ui()
+
+    def _tile_role(self, state):
+        return {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
 
     def _build_ui(self):
         self.root = ColumnPanel(role="modal-card")
         self.add_component(self.root)
         head = FlowPanel(align="justify")
         head.add_component(Label(text="Workout Complete", role="exercise-title", spacing_below="none"))
-        close = Button(text="Close", role="button-secondary")
+        close = Button(text="✕", role="icon-button")
         close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         head.add_component(close)
         self.root.add_component(head)
@@ -24,21 +26,21 @@ class WorkoutCompleteModal(WorkoutCompleteModalTemplate):
         self.root.add_component(Label(text=self.summary.get("date", ""), role="muted"))
         tiles = FlowPanel()
         for state in self.summary.get("tile_states", []):
-            lab = Label(text="  ", width=18)
-            lab.role = {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
+            lab = Label(text="  ")
+            lab.width = 18
+            lab.role = self._tile_role(state)
             tiles.add_component(lab)
         self.root.add_component(tiles)
         if self.summary.get("show_confetti"):
             self.root.add_component(Label(text="✨ 🎉 ✨", align="center", font_size=22))
-        if self.is_saving:
-            self.root.add_component(Label(text="Saving…", role="muted"))
         share = ColumnPanel(role="share-box")
         share.add_component(Label(text="Oslocon Workout!", bold=True))
         share.add_component(Label(text=self.summary.get("date", ""), role="muted"))
         share_tiles = FlowPanel()
         for state in self.summary.get("tile_states", []):
-            lab = Label(text="  ", width=18)
-            lab.role = {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
+            lab = Label(text="  ")
+            lab.width = 18
+            lab.role = self._tile_role(state)
             share_tiles.add_component(lab)
         share.add_component(share_tiles)
         self.root.add_component(share)

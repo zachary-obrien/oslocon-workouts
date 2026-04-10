@@ -20,17 +20,18 @@ class ExerciseCard(ExerciseCardTemplate):
 
         self.header = GridPanel(role="exercise-header")
         self.root.add_component(self.header, full_width_row=True)
+
         self.title_label = Label(text="", role="exercise-title", spacing_below="none")
+        self.header.add_component(self.title_label, row="A", col_xs=0, width_xs=7)
+
+        self.header_right = FlowPanel(align="right")
         self.pill_label = Label(text="", role="pill", spacing_above="none", spacing_below="none")
+        self.menu_anchor = ColumnPanel(role="menu-anchor")
         self.menu_btn = Button(text="⋯", role="icon-button")
         self.edit_btn = Button(text="Edit", role="button-secondary", visible=False)
-        self.header.add_component(self.title_label, row="A", col_xs=0, width_xs=7)
-        self.header.add_component(self.pill_label, row="A", col_xs=7, width_xs=3)
-        self.header.add_component(self.menu_btn, row="A", col_xs=10, width_xs=2)
-        self.header.add_component(self.edit_btn, row="A", col_xs=10, width_xs=2)
-
+        self.menu_anchor.add_component(self.menu_btn)
+        self.menu_anchor.add_component(self.edit_btn)
         self.menu_panel = LinearPanel(role="inline-menu", visible=False, spacing="none")
-        self.root.add_component(self.menu_panel, full_width_row=True)
         self.menu_view = Button(text="View history", role="menu-item")
         self.menu_change = Button(text="Change exercise", role="menu-item")
         self.menu_up = Button(text="Move up", role="menu-item")
@@ -39,13 +40,18 @@ class ExerciseCard(ExerciseCardTemplate):
         self.menu_skip = Button(text="Skip exercise", role="menu-item-danger")
         for c in [self.menu_view, self.menu_change, self.menu_up, self.menu_down, self.menu_remove, self.menu_skip]:
             self.menu_panel.add_component(c)
+        self.menu_anchor.add_component(self.menu_panel)
+        self.header_right.add_component(self.pill_label)
+        self.header_right.add_component(self.menu_anchor)
+        self.header.add_component(self.header_right, row="A", col_xs=7, width_xs=5)
 
         self.info_box = ColumnPanel(role="info-box", visible=False)
         self.root.add_component(self.info_box, full_width_row=True)
         self.info_prev = Label(text="", role="muted")
         self.info_strong = Label(text="", role="muted")
         self.info_box.add_component(self.info_prev)
-        self.info_box.add_component(Label(text="", height=6))
+        gap = Spacer(); gap.height = 6
+        self.info_box.add_component(gap)
         self.info_box.add_component(self.info_strong)
 
         self.sets_panel = LinearPanel(spacing="small")
@@ -172,10 +178,6 @@ class ExerciseCard(ExerciseCardTemplate):
         self.exercise_data["status"] = "skipped"
         self.exercise_data["collapsed"] = True
         self.raise_event("x-exercise-updated", exercise_index=self.exercise_index, exercise_data=self.exercise_data)
-
-    def toggle_info(self):
-        self.info_open = not self.info_open
-        self.render()
 
     def set_changed(self, exercise_index=None, set_index=None, set_data=None, **event_args):
         self.exercise_data["sets"][set_index] = dict(set_data)

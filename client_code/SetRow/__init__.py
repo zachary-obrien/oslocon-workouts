@@ -35,29 +35,32 @@ class SetRow(SetRowTemplate):
 
         self.grid = GridPanel()
         self.root.add_component(self.grid, full_width_row=True)
+
+        self.menu_anchor = ColumnPanel(role="menu-anchor")
         self.menu_btn = Button(text="⋯", role="icon-button")
-        self.grid.add_component(self.menu_btn, row="A", col_xs=0, width_xs=1)
-
-        self.controls = FlowPanel(align="center")
-        self.weight_dd = DropDown(include_placeholder=False, role="select")
-        self.weight_lbl = Label(text="lb", role="muted", spacing_above="none", spacing_below="none")
-        self.reps_dd = DropDown(include_placeholder=False, role="select")
-        self.reps_lbl = Label(text="reps", role="muted", spacing_above="none", spacing_below="none")
-        self.controls.add_component(self.weight_dd)
-        self.controls.add_component(self.weight_lbl)
-        self.controls.add_component(self.reps_dd)
-        self.controls.add_component(self.reps_lbl)
-        self.grid.add_component(self.controls, row="A", col_xs=1, width_xs=10)
-
-        self.check_btn = Button(text="✓", role="check-button")
-        self.grid.add_component(self.check_btn, row="A", col_xs=11, width_xs=1)
-
-        self.menu_panel = LinearPanel(role="inline-menu", visible=False, spacing="none")
-        self.root.add_component(self.menu_panel, full_width_row=True)
+        self.menu_anchor.add_component(self.menu_btn)
+        self.menu_panel = LinearPanel(role="inline-menu-left", visible=False, spacing="none")
         self.add_btn = Button(text="Add set below", role="menu-item")
         self.delete_btn = Button(text="Delete set", role="menu-item-danger")
         self.menu_panel.add_component(self.add_btn)
         self.menu_panel.add_component(self.delete_btn)
+        self.menu_anchor.add_component(self.menu_panel)
+        self.grid.add_component(self.menu_anchor, row="A", col_xs=0, width_xs=1)
+
+        self.weight_dd = DropDown(include_placeholder=False, role="select")
+        self.weight_dd.width = 86
+        self.grid.add_component(self.weight_dd, row="A", col_xs=1, width_xs=3)
+        self.weight_lbl = Label(text="lb", role="muted", spacing_above="none", spacing_below="none")
+        self.grid.add_component(self.weight_lbl, row="A", col_xs=4, width_xs=1)
+
+        self.reps_dd = DropDown(include_placeholder=False, role="select")
+        self.reps_dd.width = 70
+        self.grid.add_component(self.reps_dd, row="A", col_xs=5, width_xs=3)
+        self.reps_lbl = Label(text="reps", role="muted", spacing_above="none", spacing_below="none")
+        self.grid.add_component(self.reps_lbl, row="A", col_xs=8, width_xs=2)
+
+        self.check_btn = Button(text="✓", role="check-button")
+        self.grid.add_component(self.check_btn, row="A", col_xs=11, width_xs=1)
 
         self.menu_btn.set_event_handler("click", self.toggle_menu)
         self.weight_dd.set_event_handler("change", self.value_changed)
@@ -66,12 +69,28 @@ class SetRow(SetRowTemplate):
         self.add_btn.set_event_handler("click", self.add_below)
         self.delete_btn.set_event_handler("click", self.delete_self)
 
+    def _selected_weight_value(self):
+        if self.uses_bodyweight:
+            value = self.set_data.get("weight")
+            return "BW" if value in (None, "", "BW") else value
+        value = self.set_data.get("weight")
+        options = [v for _, v in self.weight_dd.items]
+        if value in options:
+            return value
+        try:
+            numeric = float(value)
+            if numeric in options:
+                return numeric
+        except Exception:
+            pass
+        return options[0] if options else None
+
     def render(self):
         self.root.role = "set-row set-row-done" if self.set_data.get("performed") else "set-row"
         self.weight_dd.items = _weight_options(self.uses_bodyweight)
         self.reps_dd.items = _rep_options()
-        self.weight_dd.selected_value = self.set_data.get("weight")
-        self.reps_dd.selected_value = self.set_data.get("reps")
+        self.weight_dd.selected_value = self._selected_weight_value()
+        self.reps_dd.selected_value = self.set_data.get("reps") if self.set_data.get("reps") in [v for _, v in self.reps_dd.items] else 12
         self.weight_lbl.visible = not self.uses_bodyweight
         self.menu_panel.visible = self.menu_open
         self.check_btn.role = "check-button check-button-checked" if self.set_data.get("performed") else "check-button"
