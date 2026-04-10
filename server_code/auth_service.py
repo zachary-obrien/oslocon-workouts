@@ -1,22 +1,28 @@
-import anvil.files
-from anvil.files import data_files
-import anvil.google.auth, anvil.google.drive, anvil.google.mail
-from anvil.google.drive import app_files
-import anvil.users
-import anvil.tables as tables
-import anvil.tables.query as q
-from anvil.tables import app_tables
 import anvil.server
+import anvil.users
 
-# This is a server module. It runs on the Anvil server,
-# rather than in the user's browser.
-#
-# To allow anvil.server.call() to call functions here, we mark
-# them with @anvil.server.callable.
-# Here is an example - you can replace it with your own:
-#
-# @anvil.server.callable
-# def say_hello(name):
-#   print("Hello, " + name + "!")
-#   return 42
-#
+from table_helpers import ensure_user_defaults
+from routine_service import ensure_preset_routine
+from workout_service import build_workout_payload
+
+
+@anvil.server.callable
+def get_bootstrap_payload():
+    user = anvil.users.get_user()
+    if user is None:
+        try:
+            user = anvil.users.login_with_google()
+        except Exception as e:
+            raise Exception(f"Google login is required. {e}")
+    ensure_user_defaults(user)
+    ensure_preset_routine(user)
+    payload = build_workout_payload(user, None)
+    return {
+        "user": {
+            "email": user["email"],
+            "display_name": user["display_name"] or user["email"].split("@")[0].title(),
+            "progress_every_n_qualifying_workouts": user["progress_every_n_qualifying_workouts"] or 3,
+            "is_admin": bool(user["is_admin"]),
+        },
+        "workout": payload,
+    }
