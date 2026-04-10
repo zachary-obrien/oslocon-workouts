@@ -34,6 +34,105 @@ USER_COLUMN_DEFAULTS = {
   "plan_tier": "free",
 }
 
+COMPLETION_MESSAGE_SEED = {
+  "skipped": [
+    "Any progress is great progress. It all adds up.",
+    "Off day or not, you still showed up. That matters.",
+    "Not every workout is perfect. Keep moving forward.",
+    "You got work in today. That still counts.",
+    "A lighter day is still a step in the right direction.",
+    "Consistency beats perfection. Get back after it next time.",
+    "Even partial progress keeps the habit strong.",
+    "You kept the habit alive today. That is a win.",
+    "Some days are about maintaining momentum. You did that.",
+    "You did not quit on the day. That matters.",
+    "It was not the perfect session, but it was still progress.",
+    "Every rep you do now makes the next day easier.",
+    "Rough sessions still build discipline.",
+    "The important part is that you kept going.",
+    "Not your best day, but still a day that counts.",
+    "You stayed in the game today. That matters long term.",
+    "A shorter session is still a session.",
+    "Showing up on a low day keeps the streak strong.",
+    "Progress is built on days exactly like this one too.",
+    "This one still moves you forward.",
+    "You did what you could today. That is enough.",
+    "No wasted day here. Keep stacking them.",
+    "You kept momentum when it would have been easy not to.",
+    "The hard part is showing up. You did that.",
+    "A missed set is not a missed future. Keep going.",
+    "Today still added to the total.",
+    "You protected the routine. That is real progress.",
+    "One imperfect workout beats none at all.",
+    "Small wins keep the engine running.",
+    "You stayed consistent. That always pays off.",
+  ],
+  "standard": [
+    "Great work. Another workout in the bank.",
+    "Solid work today. Keep stacking them.",
+    "You hit the plan. Keep rolling.",
+    "Exactly what needed to get done got done.",
+    "Strong session. Keep building.",
+    "Clean work today. On to the next one.",
+    "You handled business today.",
+    "That is how consistency looks.",
+    "You showed up and got it done.",
+    "Another step forward. Keep going.",
+    "That was a good session. Stay on it.",
+    "Planned work complete. Nice job.",
+    "You executed the day well.",
+    "That is a strong rep for the habit.",
+    "Another good day added to the total.",
+    "You did the work the right way today.",
+    "Solid session from start to finish.",
+    "You kept the standard high today.",
+    "That is a productive day in the books.",
+    "Well done. Keep the rhythm going.",
+    "This is what steady progress looks like.",
+    "Good work today. Stay locked in.",
+    "Another planned session handled.",
+    "You kept it moving today.",
+    "Strong pace. Keep it up.",
+    "You stayed on plan and got it done.",
+    "That session moved the goal forward.",
+    "Reliable work today. That adds up fast.",
+    "One more quality session complete.",
+    "You kept the trend going today.",
+  ],
+  "exceeded": [
+    "You pushed beyond the plan today. That extra effort matters.",
+    "You beat the target today. Keep that momentum rolling.",
+    "That was more than expected. Strong work.",
+    "You went past the plan and earned it.",
+    "Big session. You had more in the tank and proved it.",
+    "You exceeded the target. That is real progress.",
+    "You outperformed the plan today. Nice work.",
+    "That extra rep and effort adds up fast.",
+    "You did not just complete it. You pushed it forward.",
+    "Outstanding work. You gave more than the sheet asked for.",
+    "You found another gear today.",
+    "That was above plan. Excellent session.",
+    "You pushed past the line today. Strong work.",
+    "That extra effort is exactly how progress compounds.",
+    "You made the workout move today.",
+    "You were ahead of the target and it showed.",
+    "That is the kind of session that shifts the baseline.",
+    "You got more out of today than expected.",
+    "Extra work, extra progress. Nice job.",
+    "You raised the standard today.",
+    "That was a strong overperformance.",
+    "You went beyond the ask today.",
+    "The plan got beat today. Great work.",
+    "You pushed harder and it paid off.",
+    "That was not just solid. That was standout work.",
+    "You left the plan behind today in a good way.",
+    "You added something extra today. Keep that energy.",
+    "You stretched the target and hit it.",
+    "That session was stronger than scheduled.",
+    "You did more than enough today. Excellent work.",
+  ],
+}
+
 
 def _now():
   return datetime.now()
@@ -137,36 +236,6 @@ def _ensure_admin_user(email=DEFAULT_ADMIN_EMAIL):
 
   _set_row_values(user, updates)
   return user
-
-
-def _ensure_completion_messages():
-  defaults = [
-    ("skipped", "Any progress is great progress. It all adds up.", True, 1),
-    ("skipped", "Off days happen. What matters is you still showed up.", True, 2),
-    ("standard", "Great work. Another workout in the bank.", True, 1),
-    ("standard", "Solid work today. Keep stacking them.", True, 2),
-    ("exceeded", "You pushed beyond the plan today. That extra effort matters.", True, 1),
-    ("exceeded", "You beat the target today. Keep that momentum rolling.", True, 2),
-  ]
-
-  existing = set()
-  for row in app_tables.completion_messages.search():
-    existing.add((_safe_text(row["bucket"]), _safe_text(row["message"])))
-
-  created = 0
-  for bucket, message, active, sort_order in defaults:
-    if (bucket, message) in existing:
-      continue
-
-    app_tables.completion_messages.add_row(
-      bucket=bucket,
-      message=message,
-      active=active,
-      sort_order=sort_order,
-    )
-    created += 1
-
-  return created
 
 
 def _cleanup_old_context():
@@ -354,6 +423,63 @@ def _blob_media_from_bytes(file_bytes, rel_path):
 
 
 @anvil.server.callable
+def seed_completion_messages_full(replace_existing=False):
+  _require_table("completion_messages")
+
+  if replace_existing:
+    for row in list(app_tables.completion_messages.search()):
+      row.delete()
+
+  existing = set()
+  max_sort_by_bucket = {
+    "skipped": 0,
+    "standard": 0,
+    "exceeded": 0,
+  }
+
+  for row in app_tables.completion_messages.search():
+    bucket = _safe_text(row["bucket"])
+    message = _safe_text(row["message"])
+    existing.add((bucket, message))
+    if bucket in max_sort_by_bucket:
+      current_sort = row["sort_order"] or 0
+      if current_sort > max_sort_by_bucket[bucket]:
+        max_sort_by_bucket[bucket] = current_sort
+
+  added = {
+    "skipped": 0,
+    "standard": 0,
+    "exceeded": 0,
+  }
+
+  for bucket, messages in COMPLETION_MESSAGE_SEED.items():
+    sort_order = max_sort_by_bucket[bucket]
+    for message in messages:
+      if (bucket, message) in existing:
+        continue
+      sort_order += 1
+      app_tables.completion_messages.add_row(
+        bucket=bucket,
+        message=message,
+        active=True,
+        sort_order=sort_order,
+      )
+      added[bucket] += 1
+      existing.add((bucket, message))
+
+  totals = {
+    "skipped": len(list(app_tables.completion_messages.search(bucket="skipped"))),
+    "standard": len(list(app_tables.completion_messages.search(bucket="standard"))),
+    "exceeded": len(list(app_tables.completion_messages.search(bucket="exceeded"))),
+  }
+
+  return {
+    "added": added,
+    "totals": totals,
+  }
+
+
+@anvil.server.callable
 def prepare_exercise_import_from_data_file(zip_filename="exercises.zip", admin_email=DEFAULT_ADMIN_EMAIL):
   _require_table("exercises")
   _require_table("exercise_images")
@@ -363,7 +489,7 @@ def prepare_exercise_import_from_data_file(zip_filename="exercises.zip", admin_e
 
   zip_path = data_files[zip_filename]
   admin_user = _ensure_admin_user(admin_email)
-  created_messages = _ensure_completion_messages()
+  quote_result = seed_completion_messages_full(False)
 
   exercises_data, root_prefix = _load_exercises_data_and_prefix(zip_path)
   image_plan = _build_image_plan(exercises_data)
@@ -381,9 +507,10 @@ def prepare_exercise_import_from_data_file(zip_filename="exercises.zip", admin_e
 
   return {
     "admin_email": admin_user["email"],
-    "completion_messages_created": created_messages,
     "exercise_count": len(exercises_data),
     "image_count": len(image_plan),
+    "message_added": quote_result["added"],
+    "message_totals": quote_result["totals"],
   }
 
 
