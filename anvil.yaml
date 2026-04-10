@@ -30,16 +30,17 @@ db_schema:
     server: full
     title: Users
 dependencies: []
-name: M3 App 2
-package_name: M3_App_2
+metadata: {title: Oslocon Workout Tracker}
+name: Oslocon Workout Tracker
+package_name: Oslocon_Workout_Tracker
 renamed: true
 runtime_options:
   client_version: '3'
   legacy_features: {bootstrap3: true, class_names: true}
-  server_spec: {base: python310-minimal}
+  server_spec: {base: python310-standard}
   version: 3
 services:
-- client_config: {}
+- client_config: {enable_v2: false}
   server_config: {}
   source: /runtime/services/tables.yml
 - client_config: {allow_signup: false, confirm_email: true, enable_automatically: true, use_email: false, use_google: true}
