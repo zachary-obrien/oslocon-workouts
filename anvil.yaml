@@ -1,5 +1,10 @@
 allow_embedding: false
 db_schema:
+  completion_messages:
+    client: none
+    columns: []
+    server: full
+    title: completion_messages
   exercise_images:
     client: none
     columns:
@@ -29,7 +34,7 @@ db_schema:
       name: created_at
       type: datetime
     server: full
-    title: Exercise_images
+    title: exercise_images
   exercises:
     client: none
     columns:
@@ -111,7 +116,17 @@ db_schema:
       name: updated_at
       type: datetime
     server: full
-    title: Exercises
+    title: exercises
+  subscriptions:
+    client: none
+    columns: []
+    server: full
+    title: subscriptions
+  user_exercise_state:
+    client: none
+    columns: []
+    server: full
+    title: user_exercise_state
   users:
     client: none
     columns:
@@ -175,8 +190,113 @@ db_schema:
       client_hidden: false
       name: plan_tier
       type: string
+    - admin_ui: {order: 15, width: 200}
+      client_hidden: false
+      name: signed_up
+      type: datetime
+    - admin_ui: {order: 16, width: 200}
+      client_hidden: false
+      name: remembered_logins
+      type: simpleObject
     server: full
     title: Users
+  workout_days:
+    client: none
+    columns:
+    - admin_ui: {order: 0, width: 200}
+      client_hidden: false
+      name: user
+      target: users
+      type: link_single
+    - admin_ui: {order: 1, width: 200}
+      client_hidden: false
+      name: day_code
+      type: string
+    - admin_ui: {order: 2, width: 200}
+      client_hidden: false
+      name: display_order
+      type: number
+    - admin_ui: {order: 3, width: 200}
+      client_hidden: false
+      name: is_active
+      type: bool
+    - admin_ui: {order: 4, width: 200}
+      client_hidden: false
+      name: created_at
+      type: datetime
+    - admin_ui: {order: 5, width: 200}
+      client_hidden: false
+      name: updated_at
+      type: datetime
+    - admin_ui: {order: 6, width: 200}
+      client_hidden: false
+      name: archived_at
+      type: datetime
+    server: full
+    title: workout_days
+  workout_session_exercises:
+    client: none
+    columns: []
+    server: full
+    title: workout_session_exercises
+  workout_session_sets:
+    client: none
+    columns: []
+    server: full
+    title: workout_session_sets
+  workout_sessions:
+    client: none
+    columns: []
+    server: full
+    title: workout_sessions
+  workout_slots:
+    client: none
+    columns:
+    - admin_ui: {order: 0, width: 200}
+      client_hidden: false
+      name: user
+      target: users
+      type: link_single
+    - admin_ui: {order: 1, width: 200}
+      client_hidden: false
+      name: workout_day
+      target: workout_days
+      type: link_single
+    - admin_ui: {order: 2, width: 200}
+      client_hidden: false
+      name: slot_number
+      type: number
+    - admin_ui: {order: 3, width: 200}
+      client_hidden: false
+      name: display_order
+      type: number
+    - admin_ui: {order: 4, width: 200}
+      client_hidden: false
+      name: exercise
+      target: exercises
+      type: link_single
+    - admin_ui: {order: 5, width: 200}
+      client_hidden: false
+      name: is_active
+      type: bool
+    - admin_ui: {order: 6, width: 200}
+      client_hidden: false
+      name: base_target_weight
+      type: number
+    - admin_ui: {order: 7, width: 200}
+      client_hidden: false
+      name: base_target_reps
+      type: number
+    - admin_ui: {order: 8, width: 200}
+      client_hidden: false
+      name: default_sets
+      type: number
+    - admin_ui: {order: 9, width: 200}
+      client_hidden: false
+      name: uses_bodyweight
+      type: bool
+    server: full
+    title: workout_slots
 dependencies: []
 metadata: {logo_img: 'asset:512x512OsloconWorkout.png', title: Oslocon Workout Tracker}
 name: Oslocon Workout Tracker
@@ -189,10 +309,18 @@ runtime_options:
   version: 3
 services:
 - client_config: {enable_v2: false}
-  server_config: {}
+  server_config: {auto_create_missing_columns: true}
   source: /runtime/services/tables.yml
-- client_config: {allow_signup: false, confirm_email: true, enable_automatically: true, use_email: false, use_google: true}
-  server_config: {user_table: users}
+- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: true, enable_automatically: true, remember_me_days: 30, use_email: false, use_google: true}
+  server_config:
+    email_content:
+      confirm_address:
+        html: |-
+          <p>Thanks for registering your account with us. Please click the following link to confirm that this is your account:</p>
+          <p>{{confirm_link}}</p>
+          <p>Thanks,</p>
+          <p>The team</p>
+    user_table: users
   source: /runtime/services/anvil/users.yml
 - client_config: {}
   server_config: {}
