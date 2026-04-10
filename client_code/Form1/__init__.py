@@ -4,8 +4,9 @@ import anvil.server
 import anvil.users
 
 ADMIN_EMAIL = "zachary.a.ob@gmail.com"
-EXERCISE_BATCH_SIZE = 40
-IMAGE_BATCH_SIZE = 2
+ZIP_FILENAME = "exercises.zip"
+EXERCISE_BATCH_SIZE = 20
+IMAGE_BATCH_SIZE = 1
 
 
 class Form1(Form1Template):
@@ -19,11 +20,8 @@ class Form1(Form1Template):
 
     self.phase = None
     self.import_in_progress = False
-    self.import_zip = None
 
     self.manifest = None
-    self.seed_result = None
-
     self.exercise_next_index = 0
     self.image_next_index = 0
 
@@ -34,14 +32,10 @@ class Form1(Form1Template):
     self.image_failed_total = 0
     self.all_errors = []
 
-    self.status_label.text = "Ready. Choose the exercise zip, then click the button."
+    self.status_label.text = f"Ready. Click to import from Data Files: {ZIP_FILENAME}"
     self.bootstrap_button.text = "Import Exercise Database"
 
   def _ensure_ui(self):
-    if not hasattr(self, "file_loader_1"):
-      self.file_loader_1 = FileLoader(text="Choose exercise zip")
-      self.add_component(self.file_loader_1)
-
     if not hasattr(self, "bootstrap_button"):
       self.bootstrap_button = Button(text="Import Exercise Database", role="filled-button")
       self.add_component(self.bootstrap_button)
@@ -61,18 +55,15 @@ class Form1(Form1Template):
     if self.import_in_progress:
       return
 
-    if not self.file_loader_1.file:
-      alert("Choose the exercise zip first.")
-      return
-
-    self.import_zip = self.file_loader_1.file
     self.bootstrap_button.enabled = False
-    self.file_loader_1.enabled = False
-    self.status_label.text = "Seeding admin + messages..."
+    self.status_label.text = f"Preparing import from Data File: {ZIP_FILENAME}"
 
     try:
-      self.seed_result = anvil.server.call("seed_reference_data", ADMIN_EMAIL)
-      self.manifest = anvil.server.call("get_import_manifest", self.import_zip)
+      self.manifest = anvil.server.call(
+        "prepare_exercise_import_from_data_file",
+        ZIP_FILENAME,
+        ADMIN_EMAIL
+      )
 
       self.phase = "exercise_catalog"
       self.import_in_progress = True
@@ -93,9 +84,8 @@ class Form1(Form1Template):
 
     except Exception as e:
       self.import_in_progress = False
-      self.bootstrap_button.enabled = True
-      self.file_loader_1.enabled = True
       self.import_timer.interval = 0
+      self.bootstrap_button.enabled = True
       self.status_label.text = f"Import failed: {e}"
       alert(f"Import failed:\n\n{e}")
 
@@ -116,25 +106,23 @@ class Form1(Form1Template):
 
     except Exception as e:
       self.import_in_progress = False
-      self.bootstrap_button.enabled = True
-      self.file_loader_1.enabled = True
       self.import_timer.interval = 0
+      self.bootstrap_button.enabled = True
+      try:
+        anvil.server.call("finish_exercise_import")
+      except Exception:
+        pass
       self.status_label.text = f"Import failed: {e}"
       alert(f"Import failed:\n\n{e}")
 
   def _run_exercise_batch(self):
     total = self.manifest["exercise_count"]
-    self.status_label.text = (
-      f"Importing exercises... "
-      f"({self.exercise_next_index}/{total})"
-    )
+    self.status_label.text = f"Importing exercises... ({self.exercise_next_index}/{total})"
 
     result = anvil.server.call(
       "import_exercise_catalog_batch",
-      self.import_zip,
       self.exercise_next_index,
-      EXERCISE_BATCH_SIZE,
-      ADMIN_EMAIL,
+      EXERCISE_BATCH_SIZE
     )
 
     self.exercise_created_total += result.get("created", 0)
@@ -151,17 +139,12 @@ class Form1(Form1Template):
 
   def _run_image_batch(self):
     total = self.manifest["image_count"]
-    self.status_label.text = (
-      f"Importing images... "
-      f"({self.image_next_index}/{total})"
-    )
+    self.status_label.text = f"Importing images... ({self.image_next_index}/{total})"
 
     result = anvil.server.call(
       "import_exercise_images_batch",
-      self.import_zip,
       self.image_next_index,
-      IMAGE_BATCH_SIZE,
-      True,
+      IMAGE_BATCH_SIZE
     )
 
     self.image_imported_total += result.get("imported", 0)
@@ -180,7 +163,11 @@ class Form1(Form1Template):
     self.import_in_progress = False
     self.import_timer.interval = 0
     self.bootstrap_button.enabled = True
-    self.file_loader_1.enabled = True
+
+    try:
+      anvil.server.call("finish_exercise_import")
+    except Exception:
+      pass
 
     self.status_label.text = (
       f"Done. Exercises created: {self.exercise_created_total}, "
@@ -191,12 +178,12 @@ class Form1(Form1Template):
     )
 
     summary = (
-      f"Admin user: {self.seed_result.get('admin_email')}\n"
-      f"Completion messages created: {self.seed_result.get('completion_messages_created', 0)}\n\n"
+      f"Admin user: {self.manifest.get('admin_email')}\n"
+      f"Completion messages created: {self.manifest.get('completion_messages_created', 0)}\n\n"
       f"Exercises in zip: {self.manifest.get('exercise_count', 0)}\n"
+      f"Image refs in zip/json: {self.manifest.get('image_count', 0)}\n"
       f"Exercises created: {self.exercise_created_total}\n"
       f"Exercises updated: {self.exercise_updated_total}\n"
-      f"Image refs in JSON: {self.manifest.get('image_count', 0)}\n"
       f"Images imported: {self.image_imported_total}\n"
       f"Images skipped: {self.image_skipped_total}\n"
       f"Images failed: {self.image_failed_total}"

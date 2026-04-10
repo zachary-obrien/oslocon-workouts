@@ -1,25 +1,26 @@
 import anvil.server
 import anvil.users
-import anvil.http
 
 from anvil import BlobMedia
+from anvil.files import data_files
 from anvil.tables import app_tables
 from datetime import datetime
 
-import io
 import json
 import mimetypes
+import os
 import re
+import uuid
 import zipfile
 
 
-RAW_IMAGE_PREFIX = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/"
 DEFAULT_ADMIN_EMAIL = "zachary.a.ob@gmail.com"
 DEFAULT_SOURCE = "import"
 DEFAULT_SOURCE_VERSION = "free-exercise-db"
 
-DEFAULT_EXERCISE_BATCH_SIZE = 50
-DEFAULT_IMAGE_BATCH_SIZE = 2
+DEFAULT_EXERCISE_BATCH_SIZE = 20
+DEFAULT_IMAGE_BATCH_SIZE = 1
+SESSION_KEY = "exercise_import_ctx"
 
 USER_COLUMN_DEFAULTS = {
   "display_name": "Bootstrap User",
@@ -43,11 +44,6 @@ def _require_table(table_name):
     return getattr(app_tables, table_name)
   except AttributeError:
     raise Exception(f"Missing Data Table: {table_name}")
-
-
-def _set_row_values(row, values):
-  for key, value in values.items():
-    row[key] = value
 
 
 def _safe_text(value):
@@ -87,6 +83,11 @@ def _uses_bodyweight_default(exercise_dict):
   return equipment == "body only"
 
 
+def _set_row_values(row, values):
+  for key, value in values.items():
+    row[key] = value
+
+
 def _find_user_by_email(email):
   target = (email or "").strip().lower()
   if not target:
@@ -100,36 +101,18 @@ def _find_user_by_email(email):
   return None
 
 
-def _get_bootstrap_user():
-  user = anvil.users.get_user()
-  if user is not None:
-    return user
-
-  users_iter = iter(app_tables.users.search())
-  return next(users_iter, None)
-
-
-def _seed_user_columns(user):
-  for key, value in USER_COLUMN_DEFAULTS.items():
-    try:
-      current = user[key]
-    except Exception:
-      current = None
-
-    if current is None or current == "":
-      user[key] = value
-
-
 def _ensure_admin_user(email=DEFAULT_ADMIN_EMAIL):
   user = _find_user_by_email(email)
   if user is None:
-    raise Exception(f"No Users row found for {email}. Sign in with Google once first.")
+    raise Exception(
+      f"No Users row found for {email}. "
+      f"Sign in once with that Google account first, or change ADMIN_EMAIL."
+    )
 
   updates = {}
 
   if not user["display_name"]:
-    local_name = (email.split("@")[0] or "Admin").replace(".", " ").title()
-    updates["display_name"] = local_name
+    updates["display_name"] = (email.split("@")[0] or "Admin").replace(".", " ").title()
 
   if user["progress_every_n_qualifying_workouts"] is None:
     updates["progress_every_n_qualifying_workouts"] = 3
@@ -186,31 +169,98 @@ def _ensure_completion_messages():
   return created
 
 
-def _open_zip_media(zip_media):
-  if zip_media is None:
-    raise Exception("Provide the exercise zip as a Media object.")
-  return zipfile.ZipFile(io.BytesIO(zip_media.get_bytes()), "r")
+def _cleanup_old_context():
+  ctx = anvil.server.session.get(SESSION_KEY)
+  if not ctx:
+    return
+
+  for key in ("exercises_path", "image_plan_path"):
+    path = ctx.get(key)
+    if path and os.path.exists(path):
+      try:
+        os.remove(path)
+      except Exception:
+        pass
+
+  anvil.server.session.pop(SESSION_KEY, None)
 
 
-def _find_json_member(zip_file):
-  for name in zip_file.namelist():
+def _write_json_to_tmp(prefix, obj):
+  path = f"/tmp/{prefix}_{uuid.uuid4().hex}.json"
+  with open(path, "w", encoding="utf-8") as f:
+    json.dump(obj, f)
+  return path
+
+
+def _read_json_from_tmp(path):
+  with open(path, "r", encoding="utf-8") as f:
+    return json.load(f)
+
+
+def _find_dist_json_member(zip_names):
+  for name in zip_names:
     if name.endswith("dist/exercises.json"):
       return name
-  raise Exception("Could not find dist/exercises.json in the uploaded zip.")
+  return None
 
 
-def _get_zip_root_prefix(zip_file):
-  json_member = _find_json_member(zip_file)
-  return json_member[:-len("dist/exercises.json")]
+def _find_exercise_json_members(zip_names):
+  pattern = re.compile(r"(^|.*/)exercises/[^/]+\.json$")
+  return sorted([name for name in zip_names if pattern.search(name)])
 
 
-def _load_exercises_json(zip_file):
-  json_member = _find_json_member(zip_file)
-  raw = zip_file.read(json_member).decode("utf-8")
-  data = json.loads(raw)
-  if not isinstance(data, list):
-    raise Exception("dist/exercises.json did not contain a list.")
-  return data
+def _load_exercises_data_and_prefix(zip_path):
+  with zipfile.ZipFile(zip_path, "r") as zf:
+    names = zf.namelist()
+
+    dist_member = _find_dist_json_member(names)
+    if dist_member:
+      raw = zf.read(dist_member).decode("utf-8")
+      data = json.loads(raw)
+      if not isinstance(data, list):
+        raise Exception("dist/exercises.json is not a list.")
+      root_prefix = dist_member[:-len("dist/exercises.json")]
+      return data, root_prefix
+
+    json_members = _find_exercise_json_members(names)
+    if not json_members:
+      raise Exception("Could not find dist/exercises.json or exercises/<exercise>.json in the zip.")
+
+    data = []
+    root_prefix = None
+
+    for member in json_members:
+      raw = zf.read(member).decode("utf-8")
+      obj = json.loads(raw)
+      if isinstance(obj, dict):
+        data.append(obj)
+      if root_prefix is None:
+        idx = member.rfind("exercises/")
+        root_prefix = member[:idx] if idx >= 0 else ""
+
+    return data, (root_prefix or "")
+
+
+def _build_image_plan(exercises_data):
+  plan = []
+  for exercise_dict in exercises_data:
+    ext_id = _safe_text(exercise_dict.get("id")).strip()
+    images = _safe_list(exercise_dict.get("images"))
+    for idx, rel_path in enumerate(images):
+      plan.append({
+        "external_id": ext_id,
+        "relative_path": rel_path,
+        "sort_order": idx + 1,
+        "label": str(idx + 1),
+      })
+  return plan
+
+
+def _get_import_context():
+  ctx = anvil.server.session.get(SESSION_KEY)
+  if not ctx:
+    raise Exception("No active import context. Start the import again.")
+  return ctx
 
 
 def _build_existing_exercise_maps():
@@ -263,9 +313,11 @@ def _upsert_exercise_with_maps(exercise_dict, by_external_id, by_normalized_name
 
   if row is not None:
     _set_row_values(row, values)
-    by_external_id[ext_id] = row
-    by_normalized_name[normalized_name] = row
-    return row, "updated"
+    if ext_id:
+      by_external_id[ext_id] = row
+    if normalized_name:
+      by_normalized_name[normalized_name] = row
+    return "updated"
 
   values["created_at"] = _now()
   new_row = app_tables.exercises.add_row(**values)
@@ -273,104 +325,74 @@ def _upsert_exercise_with_maps(exercise_dict, by_external_id, by_normalized_name
     by_external_id[ext_id] = new_row
   if normalized_name:
     by_normalized_name[normalized_name] = new_row
-  return new_row, "created"
-
-
-def _build_image_plan(exercises_data):
-  plan = []
-  for exercise_dict in exercises_data:
-    ext_id = _safe_text(exercise_dict.get("id")).strip()
-    for idx, rel_path in enumerate(_safe_list(exercise_dict.get("images"))):
-      plan.append({
-        "external_id": ext_id,
-        "relative_path": rel_path,
-        "sort_order": idx + 1,
-        "label": str(idx + 1),
-      })
-  return plan
-
-
-def _find_zip_image_member(zip_file, rel_path):
-  root_prefix = _get_zip_root_prefix(zip_file)
-  candidates = [
-    rel_path,
-    f"exercises/{rel_path}",
-    f"{root_prefix}exercises/{rel_path}",
-  ]
-
-  names = set(zip_file.namelist())
-  for candidate in candidates:
-    if candidate in names:
-      return candidate
-
-  return None
-
-
-def _blob_media_from_bytes(file_bytes, rel_path, content_type=None):
-  file_name = rel_path.split("/")[-1]
-  ctype = content_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
-  return BlobMedia(content_type=ctype, content=file_bytes, name=file_name)
-
-
-def _load_image_media(zip_file, rel_path, allow_github_fallback=True):
-  if zip_file is not None:
-    member = _find_zip_image_member(zip_file, rel_path)
-    if member:
-      return _blob_media_from_bytes(zip_file.read(member), rel_path)
-
-  if allow_github_fallback:
-    url = RAW_IMAGE_PREFIX + rel_path
-    remote_media = anvil.http.request(url=url, method="GET", timeout=30)
-    return _blob_media_from_bytes(
-      remote_media.get_bytes(),
-      rel_path,
-      content_type=remote_media.content_type,
-    )
-
-  raise Exception(f"Image not found in zip: {rel_path}")
+  return "created"
 
 
 def _get_exercise_row_by_external_id(ext_id):
   return app_tables.exercises.get(external_id=ext_id)
 
 
+def _find_zip_image_member(zip_names, root_prefix, rel_path):
+  candidates = [
+    rel_path,
+    f"exercises/{rel_path}",
+    f"{root_prefix}exercises/{rel_path}",
+  ]
+
+  name_set = set(zip_names)
+  for candidate in candidates:
+    if candidate in name_set:
+      return candidate
+
+  return None
+
+
+def _blob_media_from_bytes(file_bytes, rel_path):
+  file_name = rel_path.split("/")[-1]
+  ctype = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+  return BlobMedia(content_type=ctype, content=file_bytes, name=file_name)
+
+
 @anvil.server.callable
-def seed_reference_data(admin_email=DEFAULT_ADMIN_EMAIL):
+def prepare_exercise_import_from_data_file(zip_filename="exercises.zip", admin_email=DEFAULT_ADMIN_EMAIL):
+  _require_table("exercises")
+  _require_table("exercise_images")
   _require_table("completion_messages")
+
+  _cleanup_old_context()
+
+  zip_path = data_files[zip_filename]
   admin_user = _ensure_admin_user(admin_email)
   created_messages = _ensure_completion_messages()
 
-  return {
-    "admin_email": admin_user["email"],
-    "display_name": admin_user["display_name"],
-    "is_admin": admin_user["is_admin"],
-    "role": admin_user["role"],
-    "completion_messages_created": created_messages,
-  }
-
-
-@anvil.server.callable
-def get_import_manifest(zip_media):
-  zip_file = _open_zip_media(zip_media)
-  exercises_data = _load_exercises_json(zip_file)
+  exercises_data, root_prefix = _load_exercises_data_and_prefix(zip_path)
   image_plan = _build_image_plan(exercises_data)
 
+  exercises_path = _write_json_to_tmp("exercise_data", exercises_data)
+  image_plan_path = _write_json_to_tmp("exercise_image_plan", image_plan)
+
+  anvil.server.session[SESSION_KEY] = {
+    "zip_path": str(zip_path),
+    "zip_root_prefix": root_prefix,
+    "exercises_path": exercises_path,
+    "image_plan_path": image_plan_path,
+    "zip_filename": zip_filename,
+  }
+
   return {
+    "admin_email": admin_user["email"],
+    "completion_messages_created": created_messages,
     "exercise_count": len(exercises_data),
     "image_count": len(image_plan),
   }
 
 
 @anvil.server.callable
-def import_exercise_catalog_batch(zip_media, start_index=0, batch_size=DEFAULT_EXERCISE_BATCH_SIZE, admin_email=DEFAULT_ADMIN_EMAIL):
+def import_exercise_catalog_batch(start_index=0, batch_size=DEFAULT_EXERCISE_BATCH_SIZE):
   _require_table("exercises")
-  _require_table("completion_messages")
+  ctx = _get_import_context()
 
-  _ensure_admin_user(admin_email)
-  _ensure_completion_messages()
-
-  zip_file = _open_zip_media(zip_media)
-  exercises_data = _load_exercises_json(zip_file)
+  exercises_data = _read_json_from_tmp(ctx["exercises_path"])
 
   start_index = int(start_index or 0)
   batch_size = int(batch_size or DEFAULT_EXERCISE_BATCH_SIZE)
@@ -387,7 +409,7 @@ def import_exercise_catalog_batch(zip_media, start_index=0, batch_size=DEFAULT_E
   updated = 0
 
   for exercise_dict in batch:
-    _, action = _upsert_exercise_with_maps(exercise_dict, by_external_id, by_normalized_name)
+    action = _upsert_exercise_with_maps(exercise_dict, by_external_id, by_normalized_name)
     if action == "created":
       created += 1
     else:
@@ -409,13 +431,14 @@ def import_exercise_catalog_batch(zip_media, start_index=0, batch_size=DEFAULT_E
 
 
 @anvil.server.callable
-def import_exercise_images_batch(zip_media, start_index=0, batch_size=DEFAULT_IMAGE_BATCH_SIZE, allow_github_fallback=True):
-  _require_table("exercises")
+def import_exercise_images_batch(start_index=0, batch_size=DEFAULT_IMAGE_BATCH_SIZE):
   _require_table("exercise_images")
+  _require_table("exercises")
 
-  zip_file = _open_zip_media(zip_media)
-  exercises_data = _load_exercises_json(zip_file)
-  plan = _build_image_plan(exercises_data)
+  ctx = _get_import_context()
+  image_plan = _read_json_from_tmp(ctx["image_plan_path"])
+  zip_path = ctx["zip_path"]
+  root_prefix = ctx["zip_root_prefix"]
 
   start_index = int(start_index or 0)
   batch_size = int(batch_size or DEFAULT_IMAGE_BATCH_SIZE)
@@ -425,50 +448,58 @@ def import_exercise_images_batch(zip_media, start_index=0, batch_size=DEFAULT_IM
   if batch_size < 1:
     batch_size = DEFAULT_IMAGE_BATCH_SIZE
 
-  batch = plan[start_index:start_index + batch_size]
+  batch = image_plan[start_index:start_index + batch_size]
 
   imported = 0
   skipped = 0
   failed = 0
   errors = []
 
-  for item in batch:
-    ext_id = item["external_id"]
-    rel_path = item["relative_path"]
-    sort_order = item["sort_order"]
-    label = item["label"]
+  with zipfile.ZipFile(zip_path, "r") as zf:
+    zip_names = zf.namelist()
 
-    exercise_row = _get_exercise_row_by_external_id(ext_id)
-    if exercise_row is None:
-      failed += 1
-      errors.append(f"Missing exercise row for external_id={ext_id}")
-      continue
+    for item in batch:
+      ext_id = item["external_id"]
+      rel_path = item["relative_path"]
+      sort_order = item["sort_order"]
+      label = item["label"]
 
-    existing = app_tables.exercise_images.get(
-      exercise=exercise_row,
-      source_filename=rel_path
-    )
-    if existing:
-      skipped += 1
-      continue
+      exercise_row = _get_exercise_row_by_external_id(ext_id)
+      if exercise_row is None:
+        failed += 1
+        errors.append(f"Missing exercise row for external_id={ext_id}")
+        continue
 
-    try:
-      media = _load_image_media(zip_file, rel_path, allow_github_fallback)
-      app_tables.exercise_images.add_row(
+      existing = app_tables.exercise_images.get(
         exercise=exercise_row,
-        image=media,
-        sort_order=sort_order,
-        label=label,
-        source_filename=rel_path,
-        created_at=_now(),
+        source_filename=rel_path
       )
-      imported += 1
-    except Exception as e:
-      failed += 1
-      errors.append(f"{rel_path}: {e}")
+      if existing:
+        skipped += 1
+        continue
+
+      try:
+        member = _find_zip_image_member(zip_names, root_prefix, rel_path)
+        if not member:
+          raise Exception("Image file not found inside zip")
+
+        media = _blob_media_from_bytes(zf.read(member), rel_path)
+
+        app_tables.exercise_images.add_row(
+          exercise=exercise_row,
+          image=media,
+          sort_order=sort_order,
+          label=label,
+          source_filename=rel_path,
+          created_at=_now(),
+        )
+        imported += 1
+      except Exception as e:
+        failed += 1
+        errors.append(f"{rel_path}: {e}")
 
   next_index = start_index + len(batch)
-  done = next_index >= len(plan)
+  done = next_index >= len(image_plan)
 
   return {
     "start_index": start_index,
@@ -479,18 +510,12 @@ def import_exercise_images_batch(zip_media, start_index=0, batch_size=DEFAULT_IM
     "failed": failed,
     "next_index": None if done else next_index,
     "done": done,
-    "total_images_in_plan": len(plan),
+    "total_images_in_plan": len(image_plan),
     "errors": errors[:20],
   }
 
 
 @anvil.server.callable
-def set_user_admin_by_email(email=DEFAULT_ADMIN_EMAIL):
-  user = _ensure_admin_user(email)
-  return {
-    "email": user["email"],
-    "display_name": user["display_name"],
-    "is_admin": user["is_admin"],
-    "role": user["role"],
-    "plan_tier": user["plan_tier"],
-  }
+def finish_exercise_import():
+  _cleanup_old_context()
+  return True
