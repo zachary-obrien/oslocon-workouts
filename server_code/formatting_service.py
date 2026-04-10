@@ -57,3 +57,12 @@ def tile_to_emoji(tile_state):
         "red": "🟥",
         "gray": "⬜",
     }.get(tile_state or "gray", "⬜")
+
+
+import anvil.server
+from datetime import datetime
+
+
+@anvil.server.callable
+def format_share_datetime_client():
+    return format_share_datetime(datetime.now())

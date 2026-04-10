@@ -7,47 +7,68 @@ from workout_service import build_workout_payload
 
 
 def _require_logged_in_user():
-  user = anvil.users.get_user()
-  if user is None:
-    try:
-      user = anvil.users.login_with_google()
-    except Exception as e:
-      raise Exception(f"Google login is required. {e}")
-  return user
+    user = anvil.users.get_user()
+    if user is None:
+        try:
+            user = anvil.users.login_with_google()
+        except Exception as e:
+            raise Exception(f"Google login is required. {e}")
+    return user
 
 
-def _build_user_payload(user):
-  email = user["email"] or ""
-  display_name = user["display_name"] or (email.split("@")[0].title() if email else "User")
-  return {
-    "email": email,
-    "display_name": display_name,
-    "progress_every_n_qualifying_workouts": int(user["progress_every_n_qualifying_workouts"] or 3),
-    "is_admin": bool(user["is_admin"]),
-  }
+def _display_name_for_user(user):
+    name = (user.get("display_name") or "").strip() if hasattr(user, 'get') else (user["display_name"] or "").strip()
+    if name:
+        return name
+    email = user["email"] or ""
+    local = email.split("@")[0] if email else "User"
+    return " ".join(part.capitalize() for part in local.replace('.', ' ').split()) or "User"
+
+
+def _serialize_user(user):
+    return {
+        "email": user["email"] or "",
+        "display_name": _display_name_for_user(user),
+        "progress_every_n_qualifying_workouts": int(user["progress_every_n_qualifying_workouts"] or 3),
+        "is_admin": bool(user["is_admin"]),
+    }
 
 
 @anvil.server.callable
 def get_bootstrap_payload():
-  user = _require_logged_in_user()
-  ensure_user_defaults(user)
-  ensure_preset_routine(user)
+    user = _require_logged_in_user()
+    ensure_user_defaults(user)
 
-  workout = build_workout_payload(user, None)
+    registration_required = not bool((user["display_name"] or "").strip())
+    workout = None if registration_required else build_workout_payload(user, None)
 
-  return {
-    "user": _build_user_payload(user),
-    "workout": workout,
-  }
+    return {
+        "activeEmail": user["email"] or "",
+        "activeEmailResolved": bool(user["email"]),
+        "registrationRequired": registration_required,
+        "userResolved": not registration_required,
+        "user": _serialize_user(user),
+        "workout": workout,
+    }
 
 
 @anvil.server.callable
-def ensure_user_bootstrap():
-  user = _require_logged_in_user()
-  ensure_user_defaults(user)
-  ensure_preset_routine(user)
+def register_current_user(display_name):
+    user = _require_logged_in_user()
+    ensure_user_defaults(user)
 
-  return {
-    "ok": True,
-    "user": _build_user_payload(user),
-  }
+    name = str(display_name or "").strip()
+    if not name:
+        raise Exception("Name is required.")
+
+    user["display_name"] = name
+    ensure_preset_routine(user)
+
+    return {
+        "activeEmail": user["email"] or "",
+        "activeEmailResolved": bool(user["email"]),
+        "registrationRequired": False,
+        "userResolved": True,
+        "user": _serialize_user(user),
+        "workout": build_workout_payload(user, None),
+    }

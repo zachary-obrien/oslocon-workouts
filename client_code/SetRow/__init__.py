@@ -1,114 +1,102 @@
 from ._anvil_designer import SetRowTemplate
 from anvil import *
 
-TEXT = "#f3f6fb"
-MUTED = "#9fb1c5"
-BORDER = "1px solid #24354d"
-BTN_BG = "#12253b"
-ROW_BG = "#0f1b2b"
-CHECK_BG = "#16a06c"
-
 
 def _weight_options(uses_bodyweight):
-  if uses_bodyweight:
-    return [("BW", None)]
-  opts = []
-  val = 5.0
-  while val <= 300:
-    label = f"{int(val) if float(val).is_integer() else val:g}"
-    opts.append((label, val))
-    val += 2.5
-  return opts
+    if uses_bodyweight:
+        return [("BW", "BW")]
+    vals = []
+    x = 5.0
+    while x <= 300:
+        label = f"{int(x) if float(x).is_integer() else x:g}"
+        vals.append((label, x))
+        x += 2.5
+    return vals
 
 
 def _rep_options():
-  return [(str(i), i) for i in range(3, 31)]
+    return [(str(i), i) for i in range(3, 31)]
 
 
 class SetRow(SetRowTemplate):
-  def __init__(self, exercise_index=0, set_index=0, set_data=None, uses_bodyweight=False, **properties):
-    self.init_components(**properties)
-    self.exercise_index = exercise_index
-    self.set_index = set_index
-    self.set_data = dict(set_data or {})
-    self.uses_bodyweight = uses_bodyweight
-    self._build_ui()
-    self._render()
+    def __init__(self, exercise_index=0, set_index=0, set_data=None, uses_bodyweight=False, **properties):
+        self.init_components(**properties)
+        self.exercise_index = exercise_index
+        self.set_index = set_index
+        self.set_data = dict(set_data or {})
+        self.uses_bodyweight = uses_bodyweight
+        self.menu_open = False
+        self._build_ui()
+        self.render()
 
-  def _build_ui(self):
-    self.panel = GridPanel(background=ROW_BG, foreground=TEXT, border=BORDER)
-    self.add_component(self.panel)
+    def _build_ui(self):
+        self.root = ColumnPanel(role="set-row")
+        self.add_component(self.root)
 
-    self.menu_btn = Button(text="⋯", width=40, background=BTN_BG, foreground=TEXT)
-    self.weight_dd = DropDown(include_placeholder=False, width=86, items=_weight_options(self.uses_bodyweight), background=BTN_BG, foreground=TEXT)
-    self.weight_lbl = Label(text="lb", foreground=MUTED)
-    self.reps_dd = DropDown(include_placeholder=False, width=72, items=_rep_options(), background=BTN_BG, foreground=TEXT)
-    self.reps_lbl = Label(text="reps", foreground=MUTED)
-    self.done_btn = Button(text="", width=36, background=BTN_BG, foreground=TEXT)
+        self.grid = GridPanel()
+        self.root.add_component(self.grid, full_width_row=True)
+        self.menu_btn = Button(text="⋯", role="icon-button")
+        self.grid.add_component(self.menu_btn, row="A", col_xs=0, width_xs=1)
 
-    weight_wrap = FlowPanel(gap="tiny")
-    weight_wrap.add_component(self.weight_dd)
-    weight_wrap.add_component(self.weight_lbl)
-    reps_wrap = FlowPanel(gap="tiny")
-    reps_wrap.add_component(self.reps_dd)
-    reps_wrap.add_component(self.reps_lbl)
+        self.controls = FlowPanel(align="center")
+        self.weight_dd = DropDown(include_placeholder=False, role="select")
+        self.weight_lbl = Label(text="lb", role="muted", spacing_above="none", spacing_below="none")
+        self.reps_dd = DropDown(include_placeholder=False, role="select")
+        self.reps_lbl = Label(text="reps", role="muted", spacing_above="none", spacing_below="none")
+        self.controls.add_component(self.weight_dd)
+        self.controls.add_component(self.weight_lbl)
+        self.controls.add_component(self.reps_dd)
+        self.controls.add_component(self.reps_lbl)
+        self.grid.add_component(self.controls, row="A", col_xs=1, width_xs=10)
 
-    self.panel.add_component(self.menu_btn, row="A", col_xs=0, width_xs=2)
-    self.panel.add_component(weight_wrap, row="A", col_xs=2, width_xs=4)
-    self.panel.add_component(reps_wrap, row="A", col_xs=6, width_xs=4)
-    self.panel.add_component(self.done_btn, row="A", col_xs=10, width_xs=2)
+        self.check_btn = Button(text="✓", role="check-button")
+        self.grid.add_component(self.check_btn, row="A", col_xs=11, width_xs=1)
 
-    self.menu_btn.set_event_handler("click", self.menu_btn_click)
-    self.weight_dd.set_event_handler("change", self.value_changed)
-    self.reps_dd.set_event_handler("change", self.value_changed)
-    self.done_btn.set_event_handler("click", self.toggle_done)
+        self.menu_panel = LinearPanel(role="inline-menu", visible=False, spacing="none")
+        self.root.add_component(self.menu_panel, full_width_row=True)
+        self.add_btn = Button(text="Add set below", role="menu-item")
+        self.delete_btn = Button(text="Delete set", role="menu-item-danger")
+        self.menu_panel.add_component(self.add_btn)
+        self.menu_panel.add_component(self.delete_btn)
 
-  def _render(self):
-    self.weight_lbl.visible = not self.uses_bodyweight
-    self.weight_dd.items = _weight_options(self.uses_bodyweight)
-    self.weight_dd.selected_value = self.set_data.get("weight")
-    self.reps_dd.selected_value = self.set_data.get("reps")
-    self._render_done_btn()
+        self.menu_btn.set_event_handler("click", self.toggle_menu)
+        self.weight_dd.set_event_handler("change", self.value_changed)
+        self.reps_dd.set_event_handler("change", self.value_changed)
+        self.check_btn.set_event_handler("click", self.toggle_done)
+        self.add_btn.set_event_handler("click", self.add_below)
+        self.delete_btn.set_event_handler("click", self.delete_self)
 
-  def _render_done_btn(self):
-    if self.set_data.get("performed"):
-      self.done_btn.text = "✓"
-      self.done_btn.background = CHECK_BG
-    else:
-      self.done_btn.text = ""
-      self.done_btn.background = BTN_BG
+    def render(self):
+        self.root.role = "set-row set-row-done" if self.set_data.get("performed") else "set-row"
+        self.weight_dd.items = _weight_options(self.uses_bodyweight)
+        self.reps_dd.items = _rep_options()
+        self.weight_dd.selected_value = self.set_data.get("weight")
+        self.reps_dd.selected_value = self.set_data.get("reps")
+        self.weight_lbl.visible = not self.uses_bodyweight
+        self.menu_panel.visible = self.menu_open
+        self.check_btn.role = "check-button check-button-checked" if self.set_data.get("performed") else "check-button"
+        self.check_btn.text = "✓" if self.set_data.get("performed") else ""
 
-  def _emit_changed(self):
-    self.raise_event(
-      "x-set-changed",
-      exercise_index=self.exercise_index,
-      set_index=self.set_index,
-      set_data=dict(self.set_data),
-    )
+    def toggle_menu(self, **event_args):
+        self.menu_open = not self.menu_open
+        self.render()
 
-  def value_changed(self, **event_args):
-    self.set_data["weight"] = self.weight_dd.selected_value
-    self.set_data["reps"] = self.reps_dd.selected_value
-    self._emit_changed()
+    def value_changed(self, **event_args):
+        self.set_data["weight"] = self.weight_dd.selected_value
+        self.set_data["reps"] = self.reps_dd.selected_value
+        self.raise_event("x-set-changed", exercise_index=self.exercise_index, set_index=self.set_index, set_data=dict(self.set_data))
 
-  def toggle_done(self, **event_args):
-    self.set_data["performed"] = not self.set_data.get("performed")
-    self._render_done_btn()
-    self.raise_event(
-      "x-set-check-toggled",
-      exercise_index=self.exercise_index,
-      set_index=self.set_index,
-      set_data=dict(self.set_data),
-    )
+    def toggle_done(self, **event_args):
+        self.set_data["performed"] = not self.set_data.get("performed")
+        self.render()
+        self.raise_event("x-set-changed", exercise_index=self.exercise_index, set_index=self.set_index, set_data=dict(self.set_data))
 
-  def menu_btn_click(self, **event_args):
-    result = alert(
-      title=f"Set {self.set_index + 1}",
-      content="Choose an action",
-      buttons=[("Add Set Below", "add"), ("Delete Set", "delete"), ("Cancel", None)],
-      dismissible=True,
-    )
-    if result == "add":
-      self.raise_event("x-add-set-below", exercise_index=self.exercise_index, set_index=self.set_index)
-    elif result == "delete":
-      self.raise_event("x-delete-set", exercise_index=self.exercise_index, set_index=self.set_index)
+    def add_below(self, **event_args):
+        self.menu_open = False
+        self.render()
+        self.raise_event("x-add-set-below", set_index=self.set_index)
+
+    def delete_self(self, **event_args):
+        self.menu_open = False
+        self.render()
+        self.raise_event("x-delete-set", set_index=self.set_index)

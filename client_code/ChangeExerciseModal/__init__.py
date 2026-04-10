@@ -2,53 +2,50 @@ from ._anvil_designer import ChangeExerciseModalTemplate
 from anvil import *
 import anvil.server
 
-BG = "#0f1b2b"
-TEXT = "#f3f6fb"
-MUTED = "#9fb1c5"
-BORDER = "1px solid #24354d"
-BTN = "#12253b"
-
 
 class ChangeExerciseModal(ChangeExerciseModalTemplate):
-  def __init__(self, current_name="", **properties):
-    self.init_components(**properties)
-    self.current_name = current_name or ""
-    self._build_ui()
-    self.search_box.text = self.current_name
-    self.search()
+    def __init__(self, current_name="", **properties):
+        self.init_components(**properties)
+        self.current_name = current_name or ""
+        self._build_ui()
+        self.search_box.text = self.current_name
+        self.search()
 
-  def _build_ui(self):
-    self.root = ColumnPanel(background=BG, foreground=TEXT)
-    self.add_component(self.root)
-    self.root.add_component(Label(text="Change Exercise", bold=True, font_size=20, foreground=TEXT))
-    self.root.add_component(Label(text="Search the exercise database", foreground=MUTED))
+    def _build_ui(self):
+        self.root = ColumnPanel(role="modal-card")
+        self.add_component(self.root)
+        head = FlowPanel(align="justify")
+        head.add_component(Label(text="Change Exercise", role="exercise-title", spacing_below="none"))
+        close = Button(text="Close", role="button-secondary")
+        close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
+        head.add_component(close)
+        self.root.add_component(head)
+        self.root.add_component(Label(text="Search the exercise database", role="muted"))
+        search_row = FlowPanel()
+        self.search_box = TextBox(placeholder="Search exercises...")
+        self.search_btn = Button(text="Search", role="button-primary")
+        search_row.add_component(self.search_box)
+        search_row.add_component(self.search_btn)
+        self.root.add_component(search_row)
+        self.results = LinearPanel(spacing="small")
+        self.root.add_component(self.results, full_width_row=True)
+        self.search_btn.set_event_handler("click", self.search)
+        self.search_box.set_event_handler("pressed_enter", self.search)
 
-    row = FlowPanel(align="left")
-    self.root.add_component(row)
-    self.search_box = TextBox(placeholder="Search exercises...", background=BTN, foreground=TEXT)
-    self.search_btn = Button(text="Search", role="filled-button", background="#d97f37", foreground="#ffffff")
-    row.add_component(self.search_box)
-    row.add_component(self.search_btn)
+    def search(self, **event_args):
+        rows = anvil.server.call("search_exercise_options", self.search_box.text or "")
+        self.results.clear()
+        for row in rows:
+            card = ColumnPanel(role="card")
+            btn = Button(text=row["name"], role="menu-item")
+            btn.tag.exercise_id = row["exercise_id"]
+            btn.set_event_handler("click", self.pick)
+            card.add_component(btn)
+            muscles = row.get("primary_muscles") or []
+            meta = " • ".join([str(x).title() for x in muscles[:2]])
+            if meta:
+                card.add_component(Label(text=meta, role="muted"))
+            self.results.add_component(card, full_width_row=True)
 
-    self.results_panel = LinearPanel(spacing="small")
-    self.root.add_component(self.results_panel)
-
-    self.search_btn.set_event_handler("click", self.search)
-    self.search_box.set_event_handler("pressed_enter", self.search)
-
-  def search(self, **event_args):
-    results = anvil.server.call("search_exercise_options", self.search_box.text or "")
-    self.results_panel.clear()
-    for result in results:
-      card = ColumnPanel(background=BG, foreground=TEXT, border=BORDER)
-      btn = Button(text=result['name'], align="left", background=BTN, foreground=TEXT)
-      btn.tag.exercise_id = result["exercise_id"]
-      btn.set_event_handler("click", self.choose_result)
-      card.add_component(btn)
-      primary = result.get("primary_muscles") or []
-      if primary:
-        card.add_component(Label(text=" • ".join([str(x).title() for x in primary[:2]]), foreground=MUTED))
-      self.results_panel.add_component(card, full_width_row=True)
-
-  def choose_result(self, **event_args):
-    self.raise_event("x-close-alert", value={"action": "choose", "exercise_id": event_args['sender'].tag.exercise_id})
+    def pick(self, **event_args):
+        self.raise_event("x-exercise-picked", exercise_id=event_args["sender"].tag.exercise_id, sender=self)

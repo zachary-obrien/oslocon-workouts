@@ -1,57 +1,52 @@
 from ._anvil_designer import WorkoutCompleteModalTemplate
 from anvil import *
-import anvil.js
 
 
 class WorkoutCompleteModal(WorkoutCompleteModalTemplate):
-    def __init__(self, summary=None, **properties):
+    def __init__(self, summary=None, is_saving=False, **properties):
         self.init_components(**properties)
         self.summary = summary or {}
+        self.is_saving = is_saving
         self._build_ui()
 
     def _build_ui(self):
-        self.root = LinearPanel()
+        self.root = ColumnPanel(role="modal-card")
         self.add_component(self.root)
-
-        self.root.add_component(Label(text=self.summary.get("headline", "Great work"), bold=True, font_size=22))
-        self.root.add_component(Label(text=self.summary.get("message", "")))
-        self.root.add_component(Label(text="Oslocon Workout!", bold=True, font_size=18))
-        self.root.add_component(Label(text=self.summary.get("date", "")))
-
-        tile_row = FlowPanel(spacing="tiny")
+        head = FlowPanel(align="justify")
+        head.add_component(Label(text="Workout Complete", role="exercise-title", spacing_below="none"))
+        close = Button(text="Close", role="button-secondary")
+        close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
+        head.add_component(close)
+        self.root.add_component(head)
+        self.root.add_component(Label(text=self.summary.get("headline", "Great work"), role="exercise-title", spacing_below="none"))
+        self.root.add_component(Label(text=self.summary.get("message", ""), role="muted"))
+        self.root.add_component(Label(text="Oslocon Workout!", bold=True))
+        self.root.add_component(Label(text=self.summary.get("date", ""), role="muted"))
+        tiles = FlowPanel()
         for state in self.summary.get("tile_states", []):
-            color = {
-                "green": "#1fa36a",
-                "orange": "#d98d2b",
-                "red": "#c65151",
-                "gray": "#7d8796",
-            }.get(state, "#7d8796")
-            tile = Label(text="  ", background=color, border="1px solid rgba(255,255,255,0.1)")
-            tile.width = 20
-            tile_row.add_component(tile)
-        self.root.add_component(tile_row)
-
+            lab = Label(text="  ", width=18)
+            lab.role = {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
+            tiles.add_component(lab)
+        self.root.add_component(tiles)
         if self.summary.get("show_confetti"):
-            self.root.add_component(Label(text="✨ 🎉 ✨", align="center", font_size=24))
-
-        self.share_box = TextArea(text=self.summary.get("share_text", ""), height=120)
-        self.root.add_component(self.share_box)
-
-        row = FlowPanel(spacing="medium")
-        self.root.add_component(row)
-        copy_btn = Button(text="Copy", role="filled-button")
-        close_btn = Button(text="Close")
+            self.root.add_component(Label(text="✨ 🎉 ✨", align="center", font_size=22))
+        if self.is_saving:
+            self.root.add_component(Label(text="Saving…", role="muted"))
+        share = ColumnPanel(role="share-box")
+        share.add_component(Label(text="Oslocon Workout!", bold=True))
+        share.add_component(Label(text=self.summary.get("date", ""), role="muted"))
+        share_tiles = FlowPanel()
+        for state in self.summary.get("tile_states", []):
+            lab = Label(text="  ", width=18)
+            lab.role = {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
+            share_tiles.add_component(lab)
+        share.add_component(share_tiles)
+        self.root.add_component(share)
+        row = FlowPanel()
+        copy_btn = Button(text="Copy", role="button-primary")
+        close2 = Button(text="Close", role="button-secondary")
+        copy_btn.set_event_handler("click", lambda **e: self.raise_event("x-copy", text=self.summary.get("share_text", "")))
+        close2.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         row.add_component(copy_btn)
-        row.add_component(close_btn)
-
-        copy_btn.set_event_handler("click", self.copy_clicked)
-        close_btn.set_event_handler("click", lambda **e: self.raise_event("x-close-alert", value=True))
-
-    def copy_clicked(self, **event_args):
-        try:
-            anvil.js.window.navigator.clipboard.writeText(self.share_box.text)
-            Notification("Copied to clipboard.", style="success").show()
-        except Exception:
-            self.share_box.focus()
-            self.share_box.select()
-            Notification("Clipboard copy unavailable. Share text selected.", style="warning").show()
+        row.add_component(close2)
+        self.root.add_component(row)

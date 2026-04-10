@@ -16,3 +16,11 @@ def get_rotated_message(bucket, completed_session_count):
             "exceeded": "You pushed beyond the plan today. That extra effort matters.",
         }.get(bucket, "Great work.")
     return rows[completed_session_count % len(rows)]["message"]
+
+
+import anvil.server
+
+
+@anvil.server.callable
+def get_rotated_message_client(bucket, completed_session_count):
+    return get_rotated_message(bucket, int(completed_session_count or 0))

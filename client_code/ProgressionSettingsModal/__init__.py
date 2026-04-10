@@ -9,15 +9,17 @@ class ProgressionSettingsModal(ProgressionSettingsModalTemplate):
         self._build_ui()
 
     def _build_ui(self):
-        self.root = LinearPanel()
+        self.root = ColumnPanel(role="modal-card")
         self.add_component(self.root)
-        self.root.add_component(Label(text="Progression Settings", bold=True, font_size=20))
-        self.root.add_component(Label(text="Increase weight after this many qualifying workouts:"))
-        self.dropdown = DropDown(items=[(str(i), i) for i in range(1, 7)], selected_value=self.current_value)
+        head = FlowPanel(align="justify")
+        head.add_component(Label(text="Progression Settings", role="exercise-title", spacing_below="none"))
+        close = Button(text="Close", role="button-secondary")
+        close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
+        head.add_component(close)
+        self.root.add_component(head)
+        self.root.add_component(Label(text="Increase weight after this many qualifying workouts:", role="muted"))
+        self.dropdown = DropDown(items=[(str(i), i) for i in range(1, 7)], selected_value=self.current_value, role="select")
         self.root.add_component(self.dropdown)
-        self.save_btn = Button(text="Save", role="filled-button")
-        self.root.add_component(self.save_btn)
-        self.save_btn.set_event_handler("click", self.save_clicked)
-
-    def save_clicked(self, **event_args):
-        self.raise_event("x-close-alert", value={"action": "save", "value": self.dropdown.selected_value})
+        save = Button(text="Save", role="button-primary")
+        save.set_event_handler("click", lambda **e: self.raise_event("x-save-progress", value=self.dropdown.selected_value))
+        self.root.add_component(save)
