@@ -9,82 +9,114 @@ from ..AccountForm import AccountForm
 
 
 class Form1(Form1Template):
-    def __init__(self, **properties):
-        self.init_components(**properties)
-        self.state = {}
-        self._build_ui()
-        self._bootstrap()
+  def __init__(self, **properties):
+    self.init_components(**properties)
 
-    def _build_ui(self):
-        self.background = "#0b0f14"
-        self.foreground = "#f3f6fb"
+    self.active_form = None
+    self.bootstrap_payload = None
 
-        self.root_panel = LinearPanel(spacing="none", background="#0b0f14", foreground="#f3f6fb")
-        self.add_component(self.root_panel)
+    self._build_shell()
+    self._ensure_logged_in()
+    self._bootstrap_user()
 
-        self.header = ColumnPanel(background="#141c26", foreground="#f3f6fb", border="1px solid #283548")
-        self.root_panel.add_component(self.header)
+    self.show_current_workout()
 
-        logo_row = FlowPanel(align="left", spacing="small")
-        self.header.add_component(logo_row)
+  def _build_shell(self):
+    self._root = self._get_root_container()
 
-        self.logo = Image(source="_/theme/512x512OsloconWorkout.png", height=72)
-        logo_row.add_component(self.logo)
+    if hasattr(self._root, "clear"):
+      self._root.clear()
 
-        title_col = LinearPanel(spacing="none")
-        logo_row.add_component(title_col)
-        self.title_label = Label(text="Oslocon Workouts", bold=True, font_size=28, foreground="#f3f6fb")
-        self.subtitle_label = Label(text="Loading...", foreground="#97a5b7")
-        title_col.add_component(self.title_label)
-        title_col.add_component(self.subtitle_label)
+    self.header_panel = ColumnPanel()
+    self.nav_panel = FlowPanel()
+    self.main_content_host = ColumnPanel()
 
-        self.nav_row = FlowPanel(align="left", spacing="medium")
-        self.header.add_component(self.nav_row)
-        self.workout_btn = Button(text="Workout", role="filled-button")
-        self.history_btn = Button(text="History")
-        self.account_btn = Button(text="Account")
-        self.nav_row.add_component(self.workout_btn)
-        self.nav_row.add_component(self.history_btn)
-        self.nav_row.add_component(self.account_btn)
+    self.logo_image = Image(source="_/theme/512x512OsloconWorkout.png", height=72)
+    self.title_label = Label(
+      text="Oslocon Workout",
+      bold=True,
+      font_size=26,
+      spacing_above="none",
+      spacing_below="none",
+    )
+    self.subtitle_label = Label(
+      text="Workout Tracker",
+      foreground="theme:Secondary",
+      spacing_above="none",
+    )
 
-        self.content_panel = ColumnPanel(background="#0b0f14")
-        self.root_panel.add_component(self.content_panel, full_width_row=True)
+    self.current_button = Button(text="Current Workout", role="filled-button")
+    self.history_button = Button(text="History")
+    self.account_button = Button(text="Account")
 
-        self.workout_btn.set_event_handler("click", self.show_workout)
-        self.history_btn.set_event_handler("click", self.show_history)
-        self.account_btn.set_event_handler("click", self.show_account)
+    self.current_button.set_event_handler("click", self.current_button_click)
+    self.history_button.set_event_handler("click", self.history_button_click)
+    self.account_button.set_event_handler("click", self.account_button_click)
 
-    def _bootstrap(self):
-        if anvil.users.get_user() is None:
-            try:
-                anvil.users.login_with_google()
-            except Exception as e:
-                alert(f"Google login is required.\n\n{e}")
-                return
+    self.header_panel.add_component(self.logo_image)
+    self.header_panel.add_component(self.title_label)
+    self.header_panel.add_component(self.subtitle_label)
 
-        payload = anvil.server.call("get_bootstrap_payload")
-        self.state = payload
-        user = payload["user"]
-        self.subtitle_label.text = f"Logged in as {user['display_name']} • {user['email']}"
-        self.show_workout()
+    self.nav_panel.add_component(self.current_button)
+    self.nav_panel.add_component(self.history_button)
+    self.nav_panel.add_component(self.account_button)
 
-    def _swap_content(self, form_obj):
-        self.content_panel.clear()
-        self.content_panel.add_component(form_obj, full_width_row=True)
+    self._root.add_component(self.header_panel)
+    self._root.add_component(self.nav_panel)
+    self._root.add_component(self.main_content_host)
 
-    def show_workout(self, **event_args):
-        self._swap_content(CurrentWorkoutForm())
-        self._set_nav_active("workout")
+  def _get_root_container(self):
+    if hasattr(self, "content_panel"):
+      return self.content_panel
+    if hasattr(self, "column_panel_1"):
+      return self.column_panel_1
+    if hasattr(self, "linear_panel_1"):
+      return self.linear_panel_1
 
-    def show_history(self, **event_args):
-        self._swap_content(HistoryForm())
-        self._set_nav_active("history")
+    container = ColumnPanel()
+    self.add_component(container)
+    return container
 
-    def show_account(self, **event_args):
-        self._swap_content(AccountForm())
-        self._set_nav_active("account")
+  def _ensure_logged_in(self):
+    user = anvil.users.get_user()
+    if user is None:
+      user = anvil.users.login_with_google()
+    return user
 
-    def _set_nav_active(self, active):
-        self.workout_btn.role = "filled-button" if active == "workout" else None
-        self.history_btn.role = "filled-button" if active == "history" else None
-        self.account_btn.role = "filled-button" if active == "account" else None
+  def _bootstrap_user(self):
+    self.bootstrap_payload = anvil.server.call("get_bootstrap_payload")
+
+  def _show_child_form(self, form_cls, **kwargs):
+    if hasattr(self.main_content_host, "clear"):
+      self.main_content_host.clear()
+
+    self.active_form = form_cls(**kwargs)
+    self.main_content_host.add_component(self.active_form, full_width_row=True)
+
+  def _set_nav_state(self, selected):
+    self.current_button.role = "filled-button" if selected == "current" else None
+    self.history_button.role = "filled-button" if selected == "history" else None
+    self.account_button.role = "filled-button" if selected == "account" else None
+
+  def show_current_workout(self):
+    self._set_nav_state("current")
+    initial_payload = (self.bootstrap_payload or {}).get("workout")
+    self._show_child_form(CurrentWorkoutForm, initial_payload=initial_payload)
+
+  def show_history(self):
+    self._set_nav_state("history")
+    self._show_child_form(HistoryForm)
+
+  def show_account(self):
+    self._set_nav_state("account")
+    initial_user = (self.bootstrap_payload or {}).get("user")
+    self._show_child_form(AccountForm, initial_user=initial_user)
+
+  def current_button_click(self, **event_args):
+    self.show_current_workout()
+
+  def history_button_click(self, **event_args):
+    self.show_history()
+
+  def account_button_click(self, **event_args):
+    self.show_account()
