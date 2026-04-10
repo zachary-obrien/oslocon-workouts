@@ -17,7 +17,9 @@ RAW_IMAGE_PREFIX = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/m
 DEFAULT_ADMIN_EMAIL = "zachary.a.ob@gmail.com"
 DEFAULT_SOURCE = "import"
 DEFAULT_SOURCE_VERSION = "free-exercise-db"
-DEFAULT_IMAGE_BATCH_SIZE = 5
+
+DEFAULT_EXERCISE_BATCH_SIZE = 50
+DEFAULT_IMAGE_BATCH_SIZE = 2
 
 USER_COLUMN_DEFAULTS = {
   "display_name": "Bootstrap User",
@@ -333,188 +335,6 @@ def _get_exercise_row_by_external_id(ext_id):
 
 
 @anvil.server.callable
-def bootstrap_schema():
-  required_tables = [
-    "exercises",
-    "exercise_images",
-    "workout_days",
-    "workout_slots",
-    "workout_sessions",
-    "workout_session_exercises",
-    "workout_session_sets",
-    "user_exercise_state",
-    "completion_messages",
-  ]
-
-  for table_name in required_tables:
-    _require_table(table_name)
-
-  subscriptions_table_exists = hasattr(app_tables, "subscriptions")
-
-  user = _get_bootstrap_user()
-  if user is None:
-    raise Exception("Sign in with Google once first so the Users table has at least one row.")
-
-  _seed_user_columns(user)
-
-  now = _now()
-  created_rows = []
-
-  try:
-    exercise_row = app_tables.exercises.add_row(
-      external_id="bootstrap-exercise-1",
-      source="import",
-      source_version="bootstrap",
-      name="Bootstrap Bench Press",
-      normalized_name="bootstrap bench press",
-      category="strength",
-      force="push",
-      level="beginner",
-      mechanic="compound",
-      equipment="barbell",
-      primary_muscles=["chest"],
-      secondary_muscles=["triceps", "shoulders"],
-      instructions=["Unrack the bar", "Lower to chest", "Press to lockout"],
-      group_size="Large",
-      uses_bodyweight_default=False,
-      is_active=True,
-      created_by_user=user,
-      created_at=now,
-      updated_at=now,
-    )
-    created_rows.append(exercise_row)
-
-    image_row = app_tables.exercise_images.add_row(
-      exercise=exercise_row,
-      image=BlobMedia(content_type="text/plain", content=b"bootstrap", name="bootstrap.txt"),
-      sort_order=1,
-      label="start",
-      source_filename="bootstrap.txt",
-      created_at=now,
-    )
-    created_rows.append(image_row)
-
-    workout_day_row = app_tables.workout_days.add_row(
-      user=user,
-      day_code="A",
-      display_order=1,
-      is_active=True,
-      created_at=now,
-      updated_at=now,
-      archived_at=now,
-    )
-    created_rows.append(workout_day_row)
-
-    workout_slot_row = app_tables.workout_slots.add_row(
-      user=user,
-      workout_day=workout_day_row,
-      slot_number=1,
-      display_order=1,
-      exercise=exercise_row,
-      is_active=True,
-      base_target_weight=135,
-      base_target_reps=10,
-      default_sets=5,
-      uses_bodyweight=False,
-      notes="bootstrap",
-      created_at=now,
-      updated_at=now,
-      archived_at=now,
-    )
-    created_rows.append(workout_slot_row)
-
-    workout_session_row = app_tables.workout_sessions.add_row(
-      user=user,
-      workout_day=workout_day_row,
-      day_code_snapshot="A",
-      started_at=now,
-      completed_at=now,
-      completion_bucket="standard",
-      share_text="Oslocon Workout!\n01-01-2026 9:00 AM\n🟩",
-      notes="bootstrap",
-    )
-    created_rows.append(workout_session_row)
-
-    session_exercise_row = app_tables.workout_session_exercises.add_row(
-      workout_session=workout_session_row,
-      user=user,
-      workout_slot=workout_slot_row,
-      exercise=exercise_row,
-      exercise_name_snapshot="Bootstrap Bench Press",
-      muscle_group_snapshot="chest",
-      group_size_snapshot="Large",
-      display_order_snapshot=1,
-      planned_weight=135,
-      planned_reps=10,
-      planned_sets=5,
-      uses_bodyweight=False,
-      exercise_status="completed",
-      tile_state="green",
-      exercise_changed=False,
-      exceeded_plan=False,
-      had_skipped_sets=False,
-      created_at=now,
-    )
-    created_rows.append(session_exercise_row)
-
-    session_set_row = app_tables.workout_session_sets.add_row(
-      workout_session_exercise=session_exercise_row,
-      set_index=1,
-      planned_weight=135,
-      planned_reps=10,
-      planned_uses_bodyweight=False,
-      actual_weight=135,
-      actual_reps=10,
-      actual_uses_bodyweight=False,
-      performed=True,
-      auto_completed=False,
-      estimated_1rm=180,
-      set_score=1350,
-    )
-    created_rows.append(session_set_row)
-
-    state_row = app_tables.user_exercise_state.add_row(
-      user=user,
-      exercise=exercise_row,
-      current_target_weight=135,
-      current_target_reps=10,
-      current_uses_bodyweight=False,
-      qualifying_streak=1,
-      last_completed_at=now,
-      last_workout_session_exercise=session_exercise_row,
-      strongest_estimated_1rm=180,
-      strongest_set_score=1350,
-      updated_at=now,
-    )
-    created_rows.append(state_row)
-
-    if subscriptions_table_exists:
-      subscription_row = app_tables.subscriptions.add_row(
-        user=user,
-        stripe_customer_id="cus_bootstrap",
-        stripe_subscription_id="sub_bootstrap",
-        plan_code="free",
-        status="inactive",
-        current_period_end=now,
-        cancel_at_period_end=False,
-        created_at=now,
-        updated_at=now,
-      )
-      created_rows.append(subscription_row)
-
-    _ensure_completion_messages()
-
-  finally:
-    for row in reversed(created_rows):
-      try:
-        row.delete()
-      except Exception:
-        pass
-
-  return "Bootstrap complete. Columns should now be auto-created."
-
-
-@anvil.server.callable
 def seed_reference_data(admin_email=DEFAULT_ADMIN_EMAIL):
   _require_table("completion_messages")
   admin_user = _ensure_admin_user(admin_email)
@@ -530,7 +350,19 @@ def seed_reference_data(admin_email=DEFAULT_ADMIN_EMAIL):
 
 
 @anvil.server.callable
-def import_exercise_catalog(zip_media, admin_email=DEFAULT_ADMIN_EMAIL):
+def get_import_manifest(zip_media):
+  zip_file = _open_zip_media(zip_media)
+  exercises_data = _load_exercises_json(zip_file)
+  image_plan = _build_image_plan(exercises_data)
+
+  return {
+    "exercise_count": len(exercises_data),
+    "image_count": len(image_plan),
+  }
+
+
+@anvil.server.callable
+def import_exercise_catalog_batch(zip_media, start_index=0, batch_size=DEFAULT_EXERCISE_BATCH_SIZE, admin_email=DEFAULT_ADMIN_EMAIL):
   _require_table("exercises")
   _require_table("completion_messages")
 
@@ -540,25 +372,39 @@ def import_exercise_catalog(zip_media, admin_email=DEFAULT_ADMIN_EMAIL):
   zip_file = _open_zip_media(zip_media)
   exercises_data = _load_exercises_json(zip_file)
 
+  start_index = int(start_index or 0)
+  batch_size = int(batch_size or DEFAULT_EXERCISE_BATCH_SIZE)
+
+  if start_index < 0:
+    start_index = 0
+  if batch_size < 1:
+    batch_size = DEFAULT_EXERCISE_BATCH_SIZE
+
+  batch = exercises_data[start_index:start_index + batch_size]
   by_external_id, by_normalized_name = _build_existing_exercise_maps()
 
   created = 0
   updated = 0
 
-  for exercise_dict in exercises_data:
+  for exercise_dict in batch:
     _, action = _upsert_exercise_with_maps(exercise_dict, by_external_id, by_normalized_name)
     if action == "created":
       created += 1
     else:
       updated += 1
 
-  total_image_refs = sum(len(_safe_list(x.get("images"))) for x in exercises_data)
+  next_index = start_index + len(batch)
+  done = next_index >= len(exercises_data)
 
   return {
-    "exercises_total_in_zip": len(exercises_data),
+    "start_index": start_index,
+    "batch_size": batch_size,
+    "processed": len(batch),
     "created": created,
     "updated": updated,
-    "image_refs_in_json": total_image_refs,
+    "next_index": None if done else next_index,
+    "done": done,
+    "total_exercises": len(exercises_data),
   }
 
 
