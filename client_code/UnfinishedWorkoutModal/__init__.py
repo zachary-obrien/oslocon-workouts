@@ -15,7 +15,7 @@ class UnfinishedWorkoutModal(UnfinishedWorkoutModalTemplate):
     head = FlowPanel(align="justify")
     head.add_component(
       Label(
-        text="Some sets are unfinished" if not self.sets_autocompleted else "Ready to complete",
+        text="Ready to complete" if self.sets_autocompleted else "Some sets are unfinished",
         role="exercise-title",
         spacing_above="none",
         spacing_below="none",
@@ -26,24 +26,24 @@ class UnfinishedWorkoutModal(UnfinishedWorkoutModalTemplate):
     head.add_component(close)
     self.root.add_component(head)
 
-    body = "You can go back, complete anyway, or finish the remaining sets automatically." if not self.sets_autocompleted else "Remaining sets auto-completed."
-    self.root.add_component(Label(text=body, role="muted"))
+    body_text = "Remaining sets auto-completed." if self.sets_autocompleted else "You can go back, complete anyway, or finish the remaining sets automatically."
+    self.root.add_component(Label(text=body_text, role="muted"))
 
-    grid = GridPanel()
-    go_back = Button(text="Go Back", role="button-secondary")
-    main = Button(text="Complete Workout" if self.sets_autocompleted else "Complete Anyway", role="button-primary")
+    split = GridPanel(role="modal-actions-split")
+    go_back = Button(text="Go Back", role="button-modal-secondary")
+    main = Button(text="Complete Workout" if self.sets_autocompleted else "Complete Anyway", role="button-modal-primary")
     go_back.set_event_handler("click", lambda **e: self.raise_event("x-go-back"))
     if self.sets_autocompleted:
       main.set_event_handler("click", lambda **e: self.raise_event("x-complete-after-finish"))
     else:
       main.set_event_handler("click", lambda **e: self.raise_event("x-complete-anyway"))
-    grid.add_component(go_back, row="A", col_xs=1, width_xs=4)
-    grid.add_component(main, row="A", col_xs=7, width_xs=4)
-    self.root.add_component(grid, full_width_row=True)
+    split.add_component(go_back, row="A", col_xs=1, width_xs=4)
+    split.add_component(main, row="A", col_xs=7, width_xs=4)
+    self.root.add_component(split, full_width_row=True)
 
     if not self.sets_autocompleted:
-      finish_grid = GridPanel()
-      finish = Button(text="Finish Remaining Sets", role="button-subtle")
+      center = GridPanel(role="modal-center-row")
+      finish = Button(text="Finish Remaining Sets", role="button-modal-subtle")
       finish.set_event_handler("click", lambda **e: self.raise_event("x-finish-remaining"))
-      finish_grid.add_component(finish, row="A", col_xs=3, width_xs=6)
-      self.root.add_component(finish_grid, full_width_row=True)
+      center.add_component(finish, row="A", col_xs=3, width_xs=6)
+      self.root.add_component(center, full_width_row=True)

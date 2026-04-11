@@ -26,6 +26,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.exercise_cards = []
     self.modal_form = None
     self.auto_prompted = False
+    self.suppress_auto_complete = False
     self._build_ui()
     self.render()
 
@@ -72,10 +73,10 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.hero_right.add_component(self.top_menu_btn)
     self.hero_top.add_component(self.hero_right, row="A", col_xs=8, width_xs=4)
 
-    self.top_menu_wrap = FlowPanel(align="right", visible=False)
-    self.hero.add_component(self.top_menu_wrap, full_width_row=True)
+    self.top_menu_layer = ColumnPanel(role="top-menu-layer", visible=False)
+    self.hero.add_component(self.top_menu_layer, full_width_row=True)
     self.top_menu_panel = LinearPanel(role="menu-popover", spacing="none")
-    self.top_menu_wrap.add_component(self.top_menu_panel)
+    self.top_menu_layer.add_component(self.top_menu_panel)
     self.top_menu_add_ex = Button(text="Add exercise", role="menu-item")
     self.top_menu_prog = Button(text="Progression settings", role="menu-item")
     self.top_menu_hist = Button(text="Workout history", role="menu-item")
@@ -140,9 +141,9 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.hero_title.text = display_name
     self.day_helper.text = self._day_helper_text()
     self.top_menu_remove_day.visible = bool(workout.get("can_remove_current_day"))
-    self.top_menu_wrap.visible = False
+    self.top_menu_layer.visible = False
 
-    self.day_selector.items = [(f"Day {d['day_code']}", d['day_code']) for d in workout.get("day_options", [])]
+    self.day_selector.items = [(f"Day {d['day_code']}", d["day_code"]) for d in workout.get("day_options", [])]
     self.day_selector.selected_value = workout.get("current_day")
 
     self._render_hero_progress()
@@ -163,12 +164,14 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     skipped = len([e for e in exercises if e.get("status") == "skipped"])
     remaining = total - completed - skipped
     rule = int((workout.get("progression_settings") or {}).get("progress_every_n_qualifying_workouts", 3))
+
     parts = [f"{completed} / {total} complete"]
     if skipped:
       parts.append(f"{skipped} skipped")
     if remaining:
       parts.append(f"{remaining} remaining")
     parts.append(f"Progress after {rule} qualifying workouts")
+
     for idx, text in enumerate(parts):
       if idx:
         self.hero_progress.add_component(Label(text="•", role="muted", spacing_above="none", spacing_below="none"))
@@ -179,11 +182,13 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.exercise_cards = []
     workout = self.state.get("workout") or {}
     exercises = workout.get("exercises", [])
+
     if not exercises:
       empty = ColumnPanel(role="card")
       empty.add_component(Label(text="No exercises on this day yet. Tap Add exercise to create a new slot.", role="muted"))
       self.exercise_list.add_component(empty, full_width_row=True)
       return
+
     for idx, ex in enumerate(exercises):
       card = ExerciseCard(exercise_index=idx, exercise_data=ex)
       card.set_event_handler("x-view-history", self.exercise_view_history)
@@ -197,6 +202,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
   def _refresh_workout(self, payload):
     self.state["workout"] = payload
     self.auto_prompted = False
+    self.suppress_auto_complete = False
     self._close_top_menu()
     self.render()
 
@@ -210,10 +216,10 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.render()
 
   def toggle_top_menu(self, **event_args):
-    self.top_menu_wrap.visible = not self.top_menu_wrap.visible
+    self.top_menu_layer.visible = not self.top_menu_layer.visible
 
   def _close_top_menu(self):
-    self.top_menu_wrap.visible = False
+    self.top_menu_layer.visible = False
 
   def add_exercise_click(self, **event_args):
     payload = anvil.server.call("add_exercise_slot", self.state["workout"]["current_day"])
@@ -284,7 +290,8 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
       return
     self.state["workout"]["exercises"][exercise_index] = exercise_data
     self.render()
-    self._maybe_open_auto_complete()
+    if not self.suppress_auto_complete:
+      self._maybe_open_auto_complete()
 
   def open_modal(self, form):
     self._close_top_menu()
@@ -331,6 +338,7 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.attempt_workout_complete()
 
   def attempt_workout_complete(self, **event_args):
+    self.suppress_auto_complete = False
     if self._all_done_or_skipped():
       self.submit_workout()
       return
@@ -366,6 +374,8 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
           s["auto_completed"] = True
       ex["status"] = "completed"
       ex["collapsed"] = True
+    self.auto_prompted = True
+    self.suppress_auto_complete = True
     self.render()
     form = UnfinishedWorkoutModal(sets_autocompleted=True)
     form.set_event_handler("x-close-modal", self.close_modal)
@@ -400,6 +410,8 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     self.submit_msg.text = ""
     self.state["workout"] = (result or {}).get("workout") or {}
     summary = (result or {}).get("completion_summary") or {}
+    self.suppress_auto_complete = False
+    self.auto_prompted = False
     modal = WorkoutCompleteModal(summary=summary)
     modal.set_event_handler("x-close-modal", self.close_modal)
     self.open_modal(modal)

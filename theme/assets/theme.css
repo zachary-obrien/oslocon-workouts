@@ -15,33 +15,39 @@ html, body {
 .anvil-role-shell-wrap {
   max-width: 920px;
   margin: 0 auto;
-  padding: 8px 8px 90px;
+  padding: 6px 6px 84px;
 }
 
 .anvil-role-page-subtitle {
   color: #97a5b7;
   font-size: 13px;
-  margin: 1px 0 8px;
+  margin: 1px 0 6px;
 }
 
 .anvil-role-card {
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)), #141c26;
   border: 1px solid #1f2a39;
   border-radius: 18px;
-  padding: 8px;
+  padding: 7px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.28);
   color: #f3f6fb;
   overflow: visible;
 }
 
+.anvil-role-hero-card,
+.anvil-role-exercise-card,
+.anvil-role-set-row {
+  position: relative;
+}
+
 .anvil-role-hero-card {
   background: linear-gradient(180deg, rgba(201,111,45,0.11), rgba(201,111,45,0.03)), #141c26;
   border: 1px solid rgba(201,111,45,0.22);
-  padding: 8px;
+  padding: 7px;
 }
 
 .anvil-role-workout-area {
-  padding-bottom: 76px;
+  padding-bottom: 70px;
 }
 
 .anvil-role-exercise-card {
@@ -52,6 +58,7 @@ html, body {
   color: #f3f6fb;
   box-shadow: 0 10px 30px rgba(0,0,0,0.28);
   overflow: visible;
+  margin-bottom: 5px;
 }
 
 .anvil-role-exercise-card-done {
@@ -76,7 +83,7 @@ html, body {
 
 .anvil-role-exercise-header {
   background: linear-gradient(180deg, rgba(20,28,38,0.96), rgba(20,28,38,0.90));
-  padding: 5px 10px;
+  padding: 4px 8px;
   border-bottom: 1px solid #1f2a39;
   border-top-left-radius: 18px;
   border-top-right-radius: 18px;
@@ -84,7 +91,7 @@ html, body {
 }
 
 .anvil-role-exercise-summary {
-  padding: 6px 10px 8px;
+  padding: 5px 8px 7px;
   color: #97a5b7;
   font-size: 13px;
   border-bottom-left-radius: 18px;
@@ -92,13 +99,13 @@ html, body {
 }
 
 .anvil-role-exercise-title {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #f3f6fb;
   margin: 0;
   padding: 0;
-  line-height: 1.1;
+  line-height: 1.08;
 }
 
 .anvil-role-muted {
@@ -113,7 +120,7 @@ html, body {
   border: 1px solid #283548;
   color: #97a5b7;
   border-radius: 999px;
-  padding: 4px 9px;
+  padding: 3px 8px;
   min-width: 0;
   width: auto;
 }
@@ -122,18 +129,22 @@ html, body {
   color: #97a5b7;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.02;
+  line-height: 1;
 }
 
 .anvil-role-button-primary,
 .anvil-role-button-secondary,
 .anvil-role-button-subtle,
+.anvil-role-button-modal-primary,
+.anvil-role-button-modal-secondary,
+.anvil-role-button-modal-subtle,
 .anvil-role-icon-button,
 .anvil-role-menu-item,
 .anvil-role-menu-item-danger,
 .anvil-role-check-button,
 .anvil-role-check-button-checked,
-.anvil-role-day-select {
+.anvil-role-day-select,
+.anvil-role-select {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -145,10 +156,13 @@ html, body {
 
 .anvil-role-button-primary > button,
 .anvil-role-button-primary > a,
-button.anvil-role-button-primary {
+button.anvil-role-button-primary,
+.anvil-role-button-modal-primary > button,
+.anvil-role-button-modal-primary > a,
+button.anvil-role-button-modal-primary {
   background: linear-gradient(180deg, #df7f37, #c96f2d) !important;
   color: white !important;
-  border-radius: 14px !important;
+  border-radius: 12px !important;
   border: 1px solid transparent !important;
   font-weight: 800 !important;
   min-height: 34px !important;
@@ -158,7 +172,10 @@ button.anvil-role-button-primary {
 
 .anvil-role-button-secondary > button,
 .anvil-role-button-secondary > a,
-button.anvil-role-button-secondary {
+button.anvil-role-button-secondary,
+.anvil-role-button-modal-secondary > button,
+.anvil-role-button-modal-secondary > a,
+button.anvil-role-button-modal-secondary {
   background: linear-gradient(180deg, #202b39, #1a2431) !important;
   color: #f3f6fb !important;
   border: 1px solid #283548 !important;
@@ -170,7 +187,10 @@ button.anvil-role-button-secondary {
 
 .anvil-role-button-subtle > button,
 .anvil-role-button-subtle > a,
-button.anvil-role-button-subtle {
+button.anvil-role-button-subtle,
+.anvil-role-button-modal-subtle > button,
+.anvil-role-button-modal-subtle > a,
+button.anvil-role-button-modal-subtle {
   background: rgba(255,255,255,0.04) !important;
   color: #f3f6fb !important;
   border: 1px solid #283548 !important;
@@ -183,12 +203,12 @@ button.anvil-role-button-subtle {
 .anvil-role-icon-button > button,
 .anvil-role-icon-button > a,
 button.anvil-role-icon-button {
-  width: 32px !important;
-  min-width: 32px !important;
-  max-width: 32px !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  max-height: 32px !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
   padding: 0 !important;
   border-radius: 999px !important;
   background: linear-gradient(180deg, #202b39, #1a2431) !important;
@@ -202,6 +222,30 @@ button.anvil-role-icon-button {
   justify-content: center !important;
 }
 
+.anvil-role-top-menu-layer,
+.anvil-role-exercise-menu-layer,
+.anvil-role-set-menu-layer {
+  position: absolute !important;
+  z-index: 50 !important;
+  height: 0 !important;
+  overflow: visible !important;
+}
+
+.anvil-role-top-menu-layer {
+  right: 8px !important;
+  top: 38px !important;
+}
+
+.anvil-role-exercise-menu-layer {
+  right: 8px !important;
+  top: 40px !important;
+}
+
+.anvil-role-set-menu-layer {
+  left: 4px !important;
+  top: 28px !important;
+}
+
 .anvil-role-menu-popover,
 .anvil-role-menu-popover-left {
   background: linear-gradient(180deg, rgba(28,38,52,0.98), rgba(21,29,40,0.98)) !important;
@@ -209,16 +253,8 @@ button.anvil-role-icon-button {
   border-radius: 12px !important;
   padding: 4px !important;
   box-shadow: 0 10px 30px rgba(0,0,0,0.28) !important;
-  min-width: 156px !important;
+  min-width: 154px !important;
   overflow: hidden;
-}
-
-.anvil-role-menu-popover {
-  margin-top: 4px;
-}
-
-.anvil-role-menu-popover-left {
-  margin-top: 3px;
 }
 
 .anvil-role-menu-item,
@@ -255,8 +291,9 @@ button.anvil-role-menu-item-danger {
   background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0)), #141c26;
   border: 1px solid #1f2a39;
   border-radius: 12px;
-  padding: 3px 6px;
+  padding: 2px 5px;
   overflow: visible;
+  margin: 0 0 2px;
 }
 
 .anvil-role-set-row-done {
@@ -264,11 +301,21 @@ button.anvil-role-menu-item-danger {
   border-color: rgba(31,163,106,0.34);
 }
 
-.anvil-role-select,
-.anvil-role-day-select,
+.anvil-role-set-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.anvil-role-set-unit {
+  color: #97a5b7;
+  font-size: 11px;
+  line-height: 1;
+}
+
 .anvil-role-select > select,
-.anvil-role-day-select > select,
 select.anvil-role-select,
+.anvil-role-day-select > select,
 select.anvil-role-day-select {
   border: 1px solid #283548 !important;
   background: #1b2634 !important;
@@ -278,16 +325,15 @@ select.anvil-role-day-select {
   outline: none !important;
 }
 
-.anvil-role-select,
 .anvil-role-select > select,
 select.anvil-role-select {
-  min-height: 30px !important;
+  min-height: 28px !important;
 }
 
 .anvil-role-day-select > select,
 select.anvil-role-day-select {
   min-width: 92px !important;
-  min-height: 30px !important;
+  min-height: 28px !important;
   font-size: 12px !important;
 }
 
@@ -334,20 +380,20 @@ button.anvil-role-check-button-checked {
   transform: translateX(-50%) !important;
   bottom: 0 !important;
   z-index: 30 !important;
-  width: min(920px, calc(100vw - 16px)) !important;
-  padding: 0 0 6px !important;
+  width: min(920px, calc(100vw - 12px)) !important;
+  padding: 0 0 4px !important;
   background: linear-gradient(180deg, rgba(10,15,20,0), rgba(10,15,20,0.92) 28%, rgba(10,15,20,1) 100%) !important;
 }
 
 .anvil-role-sticky-submit .anvil-role-card {
-  padding: 8px 8px 6px;
+  padding: 6px 6px 4px;
 }
 
 .anvil-role-credit {
   color: #738195;
   font-size: 11px;
   text-align: left;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .anvil-role-modal-backdrop {
@@ -367,6 +413,14 @@ button.anvil-role-check-button-checked {
   border-radius: 18px;
   padding: 14px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+}
+
+.anvil-role-modal-actions-split {
+  margin-top: 10px;
+}
+
+.anvil-role-modal-center-row {
+  margin-top: 8px;
 }
 
 .anvil-role-share-box {
@@ -394,11 +448,11 @@ button.anvil-role-check-button-checked {
 .anvil-role-tile-gray { background:#7d8796; }
 
 @media (max-width: 720px) {
-  .anvil-role-shell-wrap { padding: 6px 6px 96px; }
-  .anvil-role-card { padding: 8px; border-radius: 16px; }
-  .anvil-role-exercise-header { padding: 5px 8px; }
-  .anvil-role-exercise-title { font-size: 18px; line-height: 1.12; }
-  .anvil-role-sticky-submit { width: calc(100vw - 12px) !important; }
+  .anvil-role-shell-wrap { padding: 5px 5px 88px; }
+  .anvil-role-card { padding: 7px; border-radius: 16px; }
+  .anvil-role-exercise-header { padding: 4px 7px; }
+  .anvil-role-exercise-title { font-size: 18px; line-height: 1.1; }
+  .anvil-role-sticky-submit { width: calc(100vw - 10px) !important; }
   .anvil-role-menu-popover,
   .anvil-role-menu-popover-left { min-width: 142px !important; }
 }

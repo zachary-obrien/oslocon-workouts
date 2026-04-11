@@ -34,10 +34,10 @@ class ExerciseCard(ExerciseCardTemplate):
     self.header_right.add_component(self.edit_btn)
     self.header.add_component(self.header_right, row="A", col_xs=7, width_xs=5)
 
-    self.menu_wrap = FlowPanel(align="right", visible=False)
-    self.root.add_component(self.menu_wrap, full_width_row=True)
+    self.menu_layer = ColumnPanel(role="exercise-menu-layer", visible=False)
+    self.root.add_component(self.menu_layer, full_width_row=True)
     self.menu_panel = LinearPanel(role="menu-popover", spacing="none")
-    self.menu_wrap.add_component(self.menu_panel)
+    self.menu_layer.add_component(self.menu_panel)
     self.menu_view = Button(text="View history", role="menu-item")
     self.menu_change = Button(text="Change exercise", role="menu-item")
     self.menu_up = Button(text="Move up", role="menu-item")
@@ -91,7 +91,7 @@ class ExerciseCard(ExerciseCardTemplate):
 
     self.edit_btn.visible = collapsed
     self.menu_btn.visible = not collapsed
-    self.menu_wrap.visible = False if collapsed else self.menu_open
+    self.menu_layer.visible = False if collapsed else self.menu_open
     self.sets_panel.visible = (not collapsed) and not ex.get("is_unassigned")
     self.summary_panel.visible = not ex.get("is_unassigned")
 

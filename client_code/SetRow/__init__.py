@@ -39,27 +39,26 @@ class SetRow(SetRowTemplate):
     self.menu_btn = Button(text="⋯", role="icon-button")
     self.grid.add_component(self.menu_btn, row="A", col_xs=0, width_xs=1)
 
+    self.controls = FlowPanel(role="set-controls")
     self.weight_dd = DropDown(include_placeholder=False, role="select")
-    self.weight_dd.width = 84
-    self.grid.add_component(self.weight_dd, row="A", col_xs=1, width_xs=2)
-
-    self.weight_lbl = Label(text="lb", role="muted", spacing_above="none", spacing_below="none")
-    self.grid.add_component(self.weight_lbl, row="A", col_xs=3, width_xs=1)
-
+    self.weight_dd.width = 82
+    self.weight_lbl = Label(text="lb", role="set-unit", spacing_above="none", spacing_below="none")
     self.reps_dd = DropDown(include_placeholder=False, role="select")
-    self.reps_dd.width = 68
-    self.grid.add_component(self.reps_dd, row="A", col_xs=4, width_xs=2)
-
-    self.reps_lbl = Label(text="reps", role="muted", spacing_above="none", spacing_below="none")
-    self.grid.add_component(self.reps_lbl, row="A", col_xs=6, width_xs=1)
+    self.reps_dd.width = 66
+    self.reps_lbl = Label(text="reps", role="set-unit", spacing_above="none", spacing_below="none")
+    self.controls.add_component(self.weight_dd)
+    self.controls.add_component(self.weight_lbl)
+    self.controls.add_component(self.reps_dd)
+    self.controls.add_component(self.reps_lbl)
+    self.grid.add_component(self.controls, row="A", col_xs=1, width_xs=10)
 
     self.check_btn = Button(text="", role="check-button")
     self.grid.add_component(self.check_btn, row="A", col_xs=11, width_xs=1)
 
-    self.menu_wrap = FlowPanel(align="left", visible=False)
-    self.root.add_component(self.menu_wrap, full_width_row=True)
+    self.menu_layer = ColumnPanel(role="set-menu-layer", visible=False)
+    self.root.add_component(self.menu_layer, full_width_row=True)
     self.menu_panel = LinearPanel(role="menu-popover-left", spacing="none")
-    self.menu_wrap.add_component(self.menu_panel)
+    self.menu_layer.add_component(self.menu_panel)
     self.add_btn = Button(text="Add set below", role="menu-item")
     self.delete_btn = Button(text="Delete set", role="menu-item-danger")
     self.menu_panel.add_component(self.add_btn)
@@ -95,7 +94,8 @@ class SetRow(SetRowTemplate):
     self.weight_dd.selected_value = self._selected_weight_value()
     self.reps_dd.selected_value = self.set_data.get("reps") if self.set_data.get("reps") in [v for _, v in self.reps_dd.items] else 12
     self.weight_lbl.visible = not self.uses_bodyweight
-    self.menu_wrap.visible = self.menu_open
+    self.menu_layer.visible = self.menu_open
+
     if self.set_data.get("performed"):
       self.check_btn.role = "check-button-checked"
       self.check_btn.text = "✓"
