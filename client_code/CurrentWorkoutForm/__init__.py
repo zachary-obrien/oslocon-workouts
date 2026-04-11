@@ -53,26 +53,25 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
 
         self.hero = ColumnPanel(role="card hero-card")
         self.workout_area.add_component(self.hero, full_width_row=True)
+
         self.hero_top = GridPanel()
         self.hero.add_component(self.hero_top, full_width_row=True)
+
         self.hero_left = ColumnPanel()
-        self.hero_title = Label(text="", role="exercise-title", spacing_below="none")
-        self.day_helper = Label(text="", role="muted")
+        self.hero_title = Label(text="", role="exercise-title", spacing_above="none", spacing_below="none")
+        self.day_helper = Label(text="", role="muted", spacing_above="none", spacing_below="none")
         self.hero_left.add_component(self.hero_title)
         self.hero_left.add_component(self.day_helper)
-        self.hero_top.add_component(self.hero_left, row="A", col_xs=0, width_xs=7)
+        self.hero_top.add_component(self.hero_left, row="A", col_xs=0, width_xs=8)
 
         self.hero_right = FlowPanel(align="right")
         self.day_selector = DropDown(include_placeholder=False, role="day-select")
+        self.day_selector.width = 92
+
         self.top_menu_anchor = ColumnPanel(role="menu-anchor")
         self.top_menu_btn = Button(text="⋯", role="icon-button")
         self.top_menu_anchor.add_component(self.top_menu_btn)
         self.top_menu_panel = LinearPanel(role="inline-menu", visible=False, spacing="none")
-        self.top_menu_anchor.add_component(self.top_menu_panel)
-        self.hero_right.add_component(self.day_selector)
-        self.hero_right.add_component(self.top_menu_anchor)
-        self.hero_top.add_component(self.hero_right, row="A", col_xs=7, width_xs=5)
-
         self.top_menu_add_ex = Button(text="Add exercise", role="menu-item")
         self.top_menu_prog = Button(text="Progression settings", role="menu-item")
         self.top_menu_hist = Button(text="Workout history", role="menu-item")
@@ -80,6 +79,11 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.top_menu_remove_day = Button(text="Remove current day", role="menu-item-danger")
         for c in [self.top_menu_add_ex, self.top_menu_prog, self.top_menu_hist, self.top_menu_add_day, self.top_menu_remove_day]:
             self.top_menu_panel.add_component(c)
+        self.top_menu_anchor.add_component(self.top_menu_panel)
+
+        self.hero_right.add_component(self.day_selector)
+        self.hero_right.add_component(self.top_menu_anchor)
+        self.hero_top.add_component(self.hero_right, row="A", col_xs=8, width_xs=4)
 
         self.hero_progress = FlowPanel()
         self.hero.add_component(self.hero_progress)
@@ -174,7 +178,13 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.exercise_list.clear()
         self.exercise_cards = []
         workout = self.state.get("workout") or {}
-        for idx, ex in enumerate(workout.get("exercises", [])):
+        exercises = workout.get("exercises", [])
+        if not exercises:
+            empty = ColumnPanel(role="card")
+            empty.add_component(Label(text="No exercises on this day yet. Tap Add exercise to create a new slot.", role="muted"))
+            self.exercise_list.add_component(empty, full_width_row=True)
+            return
+        for idx, ex in enumerate(exercises):
             card = ExerciseCard(exercise_index=idx, exercise_data=ex)
             card.set_event_handler("x-view-history", self.exercise_view_history)
             card.set_event_handler("x-change-exercise", self.exercise_change)
@@ -184,18 +194,13 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
             self.exercise_cards.append(card)
             self.exercise_list.add_component(card, full_width_row=True)
 
-        if not workout.get("exercises"):
-            empty = ColumnPanel(role="card")
-            empty.add_component(Label(text="No exercises on this day yet. Tap Add exercise to create a new slot.", role="muted"))
-            self.exercise_list.add_component(empty, full_width_row=True)
-
     def _refresh_workout(self, payload):
         self.state["workout"] = payload
         self.auto_prompted = False
+        self._close_top_menu()
         self.render()
 
     def day_selector_change(self, **event_args):
-        self._close_top_menu()
         payload = anvil.server.call("load_workout_day", self.day_selector.selected_value)
         self._refresh_workout(payload)
 
@@ -211,17 +216,14 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.top_menu_panel.visible = False
 
     def add_exercise_click(self, **event_args):
-        self._close_top_menu()
         payload = anvil.server.call("add_exercise_slot", self.state["workout"]["current_day"])
         self._refresh_workout(payload)
 
     def add_day_click(self, **event_args):
-        self._close_top_menu()
         payload = anvil.server.call("add_workout_day")
         self._refresh_workout(payload)
 
     def remove_day_click(self, **event_args):
-        self._close_top_menu()
         payload = anvil.server.call("remove_workout_day", self.state["workout"]["current_day"])
         self._refresh_workout(payload)
 
@@ -255,7 +257,6 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
         self.open_modal(form)
 
     def exercise_change(self, exercise_data=None, **event_args):
-        self._close_top_menu()
         form = ChangeExerciseModal(current_name=(exercise_data or {}).get("exercise_label", ""))
         form.tag = {"slot_number": (exercise_data or {}).get("slot_number")}
         form.set_event_handler("x-close-modal", self.close_modal)
@@ -299,14 +300,6 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
     def _assigned_exercises(self):
         return [e for e in (self.state.get("workout") or {}).get("exercises", []) if not e.get("is_unassigned") and e.get("exercise_id")]
 
-    def _has_unfinished_required_sets(self):
-        for ex in self._assigned_exercises():
-            if ex.get("status") == "skipped":
-                continue
-            if any(not s.get("performed") for s in ex.get("sets", [])):
-                return True
-        return False
-
     def _all_done_or_skipped(self):
         exercises = self._assigned_exercises()
         return bool(exercises) and all(ex.get("status") == "skipped" or all(s.get("performed") for s in ex.get("sets", [])) for ex in exercises)
@@ -319,50 +312,52 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
                 return idx
         return -1
 
+    def _has_skips(self):
+        return any(ex.get("status") == "skipped" for ex in self._assigned_exercises())
+
     def _maybe_open_auto_complete(self):
         if self.auto_prompted:
             return
         if self._all_done_or_skipped():
             self.auto_prompted = True
-            form = AutoCompleteWorkoutModal(has_skipped=any(ex.get("status") == "skipped" for ex in self._assigned_exercises()))
+            form = AutoCompleteWorkoutModal(has_skipped=self._has_skips())
             form.set_event_handler("x-close-modal", self.close_modal)
-            form.set_event_handler("x-complete", self.complete_from_auto_prompt)
+            form.set_event_handler("x-complete-now", self.auto_complete_now)
             self.open_modal(form)
 
-    def complete_from_auto_prompt(self, **event_args):
+    def auto_complete_now(self, **event_args):
         self.close_modal()
-        self.submit_current_workout(show_completion_immediately=True)
+        self.attempt_workout_complete()
 
     def attempt_workout_complete(self, **event_args):
-        if not self._assigned_exercises():
-            Notification("Add at least one assigned exercise before submitting the workout.", style="warning").show()
+        if self._all_done_or_skipped():
+            self.submit_workout()
             return
-        if self._has_unfinished_required_sets():
-            self.open_unfinished_modal(False)
-        else:
-            self.submit_current_workout()
-
-    def open_unfinished_modal(self, sets_autocompleted=False):
-        form = UnfinishedWorkoutModal(sets_autocompleted=sets_autocompleted)
+        form = UnfinishedWorkoutModal()
         form.set_event_handler("x-close-modal", self.close_modal)
-        form.set_event_handler("x-go-back", self.go_back_to_first_unfinished)
-        form.set_event_handler("x-complete-anyway", self.submit_workout_anyway)
-        form.set_event_handler("x-finish-remaining", self.finish_remaining_sets)
-        form.set_event_handler("x-complete-after-finish", self.complete_after_finish)
+        form.set_event_handler("x-go-back", self.unfinished_go_back)
+        form.set_event_handler("x-complete-anyway", self.unfinished_complete_anyway)
+        form.set_event_handler("x-finish-remaining", self.unfinished_finish_remaining)
+        form.set_event_handler("x-complete-after-finish", self.unfinished_complete_after_finish)
         self.open_modal(form)
 
-    def go_back_to_first_unfinished(self, **event_args):
+    def unfinished_go_back(self, **event_args):
         self.close_modal()
         idx = self._first_unfinished_index()
-        if idx >= 0:
+        if idx >= 0 and idx < len(self.exercise_cards):
             try:
                 self.exercise_cards[idx].scroll_into_view()
             except Exception:
                 pass
 
-    def finish_remaining_sets(self, **event_args):
-        for ex in self._assigned_exercises():
-            if ex.get("status") == "skipped":
+    def unfinished_complete_anyway(self, **event_args):
+        self.close_modal()
+        self.submit_workout()
+
+    def unfinished_finish_remaining(self, **event_args):
+        exercises = (self.state.get("workout") or {}).get("exercises", [])
+        for ex in exercises:
+            if ex.get("is_unassigned") or ex.get("status") == "skipped":
                 continue
             for s in ex.get("sets", []):
                 if not s.get("performed"):
@@ -371,22 +366,19 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
             ex["status"] = "completed"
             ex["collapsed"] = True
         self.render()
-        self.open_unfinished_modal(True)
+        form = UnfinishedWorkoutModal(sets_autocompleted=True)
+        form.set_event_handler("x-close-modal", self.close_modal)
+        form.set_event_handler("x-go-back", self.unfinished_go_back)
+        form.set_event_handler("x-complete-after-finish", self.unfinished_complete_after_finish)
+        self.open_modal(form)
 
-    def complete_after_finish(self, **event_args):
+    def unfinished_complete_after_finish(self, **event_args):
         self.close_modal()
-        self.submit_current_workout(show_completion_immediately=True)
-
-    def submit_workout_anyway(self, **event_args):
-        self.close_modal()
-        self.submit_current_workout(show_completion_immediately=False)
+        self.submit_workout()
 
     def _collect_submit_payload(self):
         workout = self.state.get("workout") or {}
-        payload = {
-            "day_code": workout.get("current_day"),
-            "exercises": [],
-        }
+        payload = {"day_code": workout.get("current_day"), "exercises": []}
         for ex in workout.get("exercises", []):
             if ex.get("is_unassigned") or not ex.get("exercise_id"):
                 continue
@@ -401,23 +393,13 @@ class CurrentWorkoutForm(CurrentWorkoutFormTemplate):
             })
         return payload
 
-    def submit_current_workout(self, show_completion_immediately=True):
+    def submit_workout(self):
         self.submit_msg.text = "Saving..."
         result = anvil.server.call("submit_workout", self._collect_submit_payload())
-        self.submit_msg.text = "Saved. Loaded next workout."
+        self.submit_msg.text = ""
         self.state["workout"] = (result or {}).get("workout") or {}
+        summary = (result or {}).get("completion_summary") or {}
+        modal = WorkoutCompleteModal(summary=summary)
+        modal.set_event_handler("x-close-modal", self.close_modal)
+        self.open_modal(modal)
         self.render()
-        if show_completion_immediately:
-            summary = (result or {}).get("completion_summary") or {}
-            modal = WorkoutCompleteModal(summary=summary)
-            modal.set_event_handler("x-close-modal", self.close_modal)
-            modal.set_event_handler("x-copy", self.copy_share_text)
-            self.open_modal(modal)
-
-    def copy_share_text(self, text=None, **event_args):
-        try:
-            import anvil.js
-            anvil.js.window.navigator.clipboard.writeText(text or "")
-            Notification("Copied", style="success").show()
-        except Exception:
-            Notification("Copy failed", style="warning").show()

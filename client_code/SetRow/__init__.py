@@ -47,19 +47,20 @@ class SetRow(SetRowTemplate):
         self.menu_anchor.add_component(self.menu_panel)
         self.grid.add_component(self.menu_anchor, row="A", col_xs=0, width_xs=1)
 
+        self.controls = FlowPanel(align="left")
         self.weight_dd = DropDown(include_placeholder=False, role="select")
         self.weight_dd.width = 86
-        self.grid.add_component(self.weight_dd, row="A", col_xs=1, width_xs=3)
         self.weight_lbl = Label(text="lb", role="muted", spacing_above="none", spacing_below="none")
-        self.grid.add_component(self.weight_lbl, row="A", col_xs=4, width_xs=1)
-
         self.reps_dd = DropDown(include_placeholder=False, role="select")
         self.reps_dd.width = 70
-        self.grid.add_component(self.reps_dd, row="A", col_xs=5, width_xs=3)
         self.reps_lbl = Label(text="reps", role="muted", spacing_above="none", spacing_below="none")
-        self.grid.add_component(self.reps_lbl, row="A", col_xs=8, width_xs=2)
+        self.controls.add_component(self.weight_dd)
+        self.controls.add_component(self.weight_lbl)
+        self.controls.add_component(self.reps_dd)
+        self.controls.add_component(self.reps_lbl)
+        self.grid.add_component(self.controls, row="A", col_xs=1, width_xs=10)
 
-        self.check_btn = Button(text="✓", role="check-button")
+        self.check_btn = Button(text="", role="check-button")
         self.grid.add_component(self.check_btn, row="A", col_xs=11, width_xs=1)
 
         self.menu_btn.set_event_handler("click", self.toggle_menu)
@@ -93,8 +94,12 @@ class SetRow(SetRowTemplate):
         self.reps_dd.selected_value = self.set_data.get("reps") if self.set_data.get("reps") in [v for _, v in self.reps_dd.items] else 12
         self.weight_lbl.visible = not self.uses_bodyweight
         self.menu_panel.visible = self.menu_open
-        self.check_btn.role = "check-button check-button-checked" if self.set_data.get("performed") else "check-button"
-        self.check_btn.text = "✓" if self.set_data.get("performed") else ""
+        if self.set_data.get("performed"):
+            self.check_btn.role = "check-button-checked"
+            self.check_btn.text = "✓"
+        else:
+            self.check_btn.role = "check-button"
+            self.check_btn.text = ""
 
     def toggle_menu(self, **event_args):
         self.menu_open = not self.menu_open

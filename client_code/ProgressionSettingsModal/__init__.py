@@ -12,7 +12,7 @@ class ProgressionSettingsModal(ProgressionSettingsModalTemplate):
         self.root = ColumnPanel(role="modal-card")
         self.add_component(self.root)
         head = FlowPanel(align="justify")
-        head.add_component(Label(text="Progression Settings", role="exercise-title", spacing_below="none"))
+        head.add_component(Label(text="Progression Settings", role="exercise-title", spacing_above="none", spacing_below="none"))
         close = Button(text="✕", role="icon-button")
         close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         head.add_component(close)

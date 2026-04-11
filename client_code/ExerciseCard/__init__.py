@@ -10,7 +10,6 @@ class ExerciseCard(ExerciseCardTemplate):
         self.exercise_index = exercise_index
         self.exercise_data = dict(exercise_data or {})
         self.menu_open = False
-        self.info_open = False
         self._build_ui()
         self.render()
 
@@ -21,11 +20,14 @@ class ExerciseCard(ExerciseCardTemplate):
         self.header = GridPanel(role="exercise-header")
         self.root.add_component(self.header, full_width_row=True)
 
-        self.title_label = Label(text="", role="exercise-title", spacing_below="none")
+        self.title_label = Label(text="", role="exercise-title", spacing_above="none", spacing_below="none")
         self.header.add_component(self.title_label, row="A", col_xs=0, width_xs=7)
 
         self.header_right = FlowPanel(align="right")
-        self.pill_label = Label(text="", role="pill", spacing_above="none", spacing_below="none")
+        self.pill_shell = FlowPanel(role="pill-shell")
+        self.pill_text = Label(text="", role="pill-text", spacing_above="none", spacing_below="none")
+        self.pill_shell.add_component(self.pill_text)
+
         self.menu_anchor = ColumnPanel(role="menu-anchor")
         self.menu_btn = Button(text="⋯", role="icon-button")
         self.edit_btn = Button(text="Edit", role="button-secondary", visible=False)
@@ -41,22 +43,14 @@ class ExerciseCard(ExerciseCardTemplate):
         for c in [self.menu_view, self.menu_change, self.menu_up, self.menu_down, self.menu_remove, self.menu_skip]:
             self.menu_panel.add_component(c)
         self.menu_anchor.add_component(self.menu_panel)
-        self.header_right.add_component(self.pill_label)
+
+        self.header_right.add_component(self.pill_shell)
         self.header_right.add_component(self.menu_anchor)
         self.header.add_component(self.header_right, row="A", col_xs=7, width_xs=5)
 
-        self.info_box = ColumnPanel(role="info-box", visible=False)
-        self.root.add_component(self.info_box, full_width_row=True)
-        self.info_prev = Label(text="", role="muted")
-        self.info_strong = Label(text="", role="muted")
-        self.info_box.add_component(self.info_prev)
-        gap = Spacer(); gap.height = 6
-        self.info_box.add_component(gap)
-        self.info_box.add_component(self.info_strong)
-
         self.sets_panel = LinearPanel(spacing="small")
         self.root.add_component(self.sets_panel, full_width_row=True)
-        self.status_label = Label(text="", role="muted")
+        self.status_label = Label(text="", role="muted", spacing_above="none", spacing_below="none")
         self.root.add_component(self.status_label)
 
         self.menu_btn.set_event_handler("click", self.toggle_menu)
@@ -70,49 +64,50 @@ class ExerciseCard(ExerciseCardTemplate):
 
     def _apply_roles(self):
         ex = self.exercise_data
-        self.root.role = "exercise-card"
+        role = "exercise-card"
         if ex.get("status") == "completed":
-            self.root.role = "exercise-card exercise-card-done"
+            role = "exercise-card exercise-card-done"
         elif ex.get("status") == "skipped":
-            self.root.role = "exercise-card exercise-card-skipped"
+            role = "exercise-card exercise-card-skipped"
         elif any(s.get("performed") for s in ex.get("sets", [])) and any(not s.get("performed") for s in ex.get("sets", [])):
-            self.root.role = "exercise-card exercise-card-partial"
+            role = "exercise-card exercise-card-partial"
+        self.root.role = role
 
     def render(self):
         ex = self.exercise_data
         self._apply_roles()
         self.title_label.text = ex.get("exercise_label") or "Select exercise"
-        self.pill_label.text = (ex.get("muscle_group") or ("Empty slot" if ex.get("is_unassigned") else "Unassigned")).title()
+        self.pill_text.text = (ex.get("muscle_group") or ("Empty slot" if ex.get("is_unassigned") else "Unassigned")).title()
+
         self.menu_skip.visible = not ex.get("is_unassigned")
         self.menu_view.visible = not ex.get("is_unassigned")
-        self.menu_change.visible = True
         self.menu_up.enabled = bool(ex.get("can_move_up"))
         self.menu_down.enabled = bool(ex.get("can_move_down"))
-
-        self.info_prev.text = self._prev_text()
-        self.info_strong.text = self._strong_text()
 
         collapsed = (not ex.get("is_unassigned")) and ex.get("status") in ("completed", "skipped") and ex.get("collapsed") is not False
         self.edit_btn.visible = collapsed
         self.menu_btn.visible = not collapsed
         self.menu_panel.visible = False if collapsed else self.menu_open
-        self.info_box.visible = (not collapsed) and self.info_open and not ex.get("is_unassigned")
         self.sets_panel.visible = (not collapsed) and not ex.get("is_unassigned")
-        self.status_label.visible = (not ex.get("is_unassigned"))
+        self.status_label.visible = not ex.get("is_unassigned")
 
         self.sets_panel.clear()
         if ex.get("is_unassigned"):
             self.status_label.text = "This slot is empty. Choose an existing exercise."
-        elif collapsed:
+            return
+
+        if collapsed:
             self.status_label.text = self._collapsed_summary()
-        else:
-            for idx, set_data in enumerate(ex.get("sets", [])):
-                row = SetRow(exercise_index=self.exercise_index, set_index=idx, set_data=set_data, uses_bodyweight=bool(ex.get("uses_bodyweight")))
-                row.set_event_handler("x-set-changed", self.set_changed)
-                row.set_event_handler("x-add-set-below", self.add_set_below)
-                row.set_event_handler("x-delete-set", self.delete_set)
-                self.sets_panel.add_component(row, full_width_row=True)
-            self.status_label.text = ""
+            return
+
+        for idx, set_data in enumerate(ex.get("sets", [])):
+            row = SetRow(exercise_index=self.exercise_index, set_index=idx, set_data=set_data, uses_bodyweight=bool(ex.get("uses_bodyweight")))
+            row.set_event_handler("x-set-changed", self.set_changed)
+            row.set_event_handler("x-add-set-below", self.add_set_below)
+            row.set_event_handler("x-delete-set", self.delete_set)
+            self.sets_panel.add_component(row, full_width_row=True)
+
+        self.status_label.text = ""
 
     def _collapsed_summary(self):
         ex = self.exercise_data
@@ -126,22 +121,6 @@ class ExerciseCard(ExerciseCardTemplate):
         first_weight = sets[0].get("weight")
         weight_text = "BW" if ex.get("uses_bodyweight") else f"{first_weight} lb"
         return f"Completed · {checked}/{len(sets)} sets checked · {weight_text} · avg {avg_reps} reps"
-
-    def _prev_text(self):
-        prev = self.exercise_data.get("previous_session")
-        if not prev:
-            return "No previous workout yet."
-        if prev.get("status") == "skipped":
-            return "Skipped last time."
-        sets = prev.get("sets") or []
-        set_line = ", ".join(f"{s.get('weight')}×{s.get('reps')}" for s in sets)
-        return f"Previous workout · Recommended: {prev.get('planned_weight')} × {prev.get('planned_reps')} · Sets: {set_line}"
-
-    def _strong_text(self):
-        strong = self.exercise_data.get("strongest_day")
-        if not strong:
-            return "No strongest day yet."
-        return f"Strongest day · Best estimated 1RM: {strong.get('best_e1rm') or '—'} · Best set score: {strong.get('best_set_score') or '—'}"
 
     def toggle_menu(self, **event_args):
         self.menu_open = not self.menu_open

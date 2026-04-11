@@ -20,8 +20,8 @@ class WorkoutHistoryModal(WorkoutHistoryModalTemplate):
         self.add_component(self.root)
         head = FlowPanel(align="justify")
         title = "Workout history" if not self.exercise_name else self.exercise_name
-        head.add_component(Label(text=title, role="exercise-title", spacing_below="none"))
-        close = Button(text="Close", role="button-secondary")
+        head.add_component(Label(text=title, role="exercise-title", spacing_above="none", spacing_below="none"))
+        close = Button(text="✕", role="icon-button")
         close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         head.add_component(close)
         self.root.add_component(head)

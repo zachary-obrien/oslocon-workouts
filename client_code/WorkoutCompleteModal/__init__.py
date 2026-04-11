@@ -9,18 +9,18 @@ class WorkoutCompleteModal(WorkoutCompleteModalTemplate):
         self._build_ui()
 
     def _tile_role(self, state):
-        return {"green":"tile-green","orange":"tile-orange","red":"tile-red","gray":"tile-gray"}.get(state, "tile-gray")
+        return {"green": "tile-green", "orange": "tile-orange", "red": "tile-red", "gray": "tile-gray"}.get(state, "tile-gray")
 
     def _build_ui(self):
         self.root = ColumnPanel(role="modal-card")
         self.add_component(self.root)
         head = FlowPanel(align="justify")
-        head.add_component(Label(text="Workout Complete", role="exercise-title", spacing_below="none"))
+        head.add_component(Label(text="Workout Complete", role="exercise-title", spacing_above="none", spacing_below="none"))
         close = Button(text="✕", role="icon-button")
         close.set_event_handler("click", lambda **e: self.raise_event("x-close-modal"))
         head.add_component(close)
         self.root.add_component(head)
-        self.root.add_component(Label(text=self.summary.get("headline", "Great work"), role="exercise-title", spacing_below="none"))
+        self.root.add_component(Label(text=self.summary.get("headline", "Great work"), role="exercise-title", spacing_above="none", spacing_below="none"))
         self.root.add_component(Label(text=self.summary.get("message", ""), role="muted"))
         self.root.add_component(Label(text="Oslocon Workout!", bold=True))
         self.root.add_component(Label(text=self.summary.get("date", ""), role="muted"))
